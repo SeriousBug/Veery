@@ -133,22 +133,6 @@ export function NotificationTarget({
             ))}
             <option value={CUSTOM_SCHEME}>Other (paste an address)</option>
           </select>
-          <a
-            href={spec?.docs ?? OVERVIEW_DOCS}
-            target="_blank"
-            rel="noreferrer"
-            className={hstack({
-              gap: "1",
-              fontSize: "sm",
-              fontWeight: "bold",
-              color: "accent",
-              textDecoration: "underline",
-              whiteSpace: "nowrap",
-            })}
-          >
-            {spec ? `${spec.label} address format` : "All address formats"}
-            <ExternalLink size={13} className={css({ flexShrink: 0 })} />
-          </a>
         </span>
         {!disabled && (
           <button
@@ -246,18 +230,34 @@ export function NotificationTarget({
         </>
       )}
 
-      {url && (
-        <code
-          className={css({
-            fontFamily: "mono",
+      <div className={vstack({ gap: "1", alignItems: "flex-start" })}>
+        {url && (
+          <code
+            className={css({
+              fontFamily: "mono",
+              fontSize: "xs",
+              color: "textMuted",
+              wordBreak: "break-all",
+            })}
+          >
+            {url}
+          </code>
+        )}
+        <a
+          href={spec?.docs ?? OVERVIEW_DOCS}
+          target="_blank"
+          rel="noreferrer"
+          className={hstack({
+            gap: "1",
             fontSize: "xs",
             color: "textMuted",
-            wordBreak: "break-all",
+            _hover: { color: "accent", textDecoration: "underline" },
           })}
         >
-          {url}
-        </code>
-      )}
+          {spec ? `${spec.label} address format` : "All address formats"}
+          <ExternalLink size={12} className={css({ flexShrink: 0 })} />
+        </a>
+      </div>
     </div>
   );
 }
