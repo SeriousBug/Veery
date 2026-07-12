@@ -121,8 +121,9 @@ go run ./cmd/veery
 # Frontend dev server (proxies /api, /auth, /ws to :8080)
 cd web && pnpm install && pnpm dev
 
-# Regenerate shared TypeScript types from the Go structs (single source of truth)
-go generate ./internal/api/
+# Regenerate shared TypeScript types from the Go structs (single source of truth).
+# Run from the repo root: tygo reads tygo.yaml from the working directory.
+go run github.com/gzuidhof/tygo@v0.2.17 generate
 
 # Build the tiny production image
 docker build -t veery .
