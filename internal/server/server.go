@@ -65,6 +65,10 @@ func (s *Server) routes() {
 	// Auth (public).
 	s.mux.HandleFunc("POST /auth/register/begin", s.handleRegisterBegin)
 	s.mux.HandleFunc("POST /auth/register/finish", s.handleRegisterFinish)
+	// Add-a-device: enroll an extra passkey for the current user (recovery /
+	// second device), no invite needed.
+	s.mux.HandleFunc("POST /auth/register/device/begin", s.requireAuth(s.handleAddDeviceBegin))
+	s.mux.HandleFunc("POST /auth/register/device/finish", s.requireAuth(s.handleAddDeviceFinish))
 	s.mux.HandleFunc("POST /auth/login/begin", s.handleLoginBegin)
 	s.mux.HandleFunc("POST /auth/login/finish", s.handleLoginFinish)
 	s.mux.HandleFunc("POST /auth/logout", s.handleLogout)

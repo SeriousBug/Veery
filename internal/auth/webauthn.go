@@ -160,6 +160,72 @@ func (m *Manager) FinishRegistration(ceremonyID, inviteToken string, r *http.Req
 	return cer.userID, nil
 }
 
+// BeginAddDevice starts enrolling an ADDITIONAL passkey for an already
+// authenticated user (recovery / second device). It reuses the user's existing
+// WebAuthn id and excludes their current credentials so the same authenticator
+// isn't registered twice. No invite is involved.
+func (m *Manager) BeginAddDevice(userID, userName string, existingCreds []store.StoredCredential) (*protocol.CredentialCreation, string, error) {
+	user := &authUser{id: []byte(userID), name: userName}
+	for _, c := range existingCreds {
+		user.creds = append(user.creds, toWebauthnCredential(c))
+	}
+	exclusions := make([]protocol.CredentialDescriptor, 0, len(user.creds))
+	for i := range user.creds {
+		exclusions = append(exclusions, user.creds[i].Descriptor())
+	}
+
+	sel := protocol.AuthenticatorSelection{
+		ResidentKey:      protocol.ResidentKeyRequirementRequired,
+		UserVerification: protocol.VerificationPreferred,
+	}
+	opts, sessionData, err := m.wa.BeginRegistration(user,
+		webauthn.WithAuthenticatorSelection(sel),
+		webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementRequired),
+		webauthn.WithExclusions(exclusions),
+	)
+	if err != nil {
+		return nil, "", err
+	}
+	cid := m.put(&ceremony{data: sessionData, userID: userID, name: userName})
+	return opts, cid, nil
+}
+
+// FinishAddDevice completes an add-device ceremony, storing the new credential
+// against the existing user. It creates no user and consumes no invite.
+func (m *Manager) FinishAddDevice(ceremonyID, userID string, r *http.Request) error {
+	cer, ok := m.take(ceremonyID)
+	if !ok {
+		return ErrCeremonyExpired
+	}
+	if cer.userID != userID {
+		return errors.New("ceremony does not match session user")
+	}
+	parsed, err := protocol.ParseCredentialCreationResponseBody(r.Body)
+	if err != nil {
+		return err
+	}
+	user := newRegistrationUser(cer.userID, cer.name)
+	cred, err := m.wa.CreateCredential(user, *cer.data, parsed)
+	if err != nil {
+		return err
+	}
+	var transports []string
+	for _, t := range cred.Transport {
+		transports = append(transports, string(t))
+	}
+	return m.st.AddCredential(store.StoredCredential{
+		ID:         randToken(12),
+		UserID:     cer.userID,
+		CredID:     cred.ID,
+		PublicKey:  cred.PublicKey,
+		SignCount:  cred.Authenticator.SignCount,
+		Transports: transports,
+		AAGUID:     cred.Authenticator.AAGUID,
+		Name:       "Passkey",
+		CreatedAt:  time.Now().Unix(),
+	})
+}
+
 // BeginLogin starts a usernameless (discoverable) login.
 func (m *Manager) BeginLogin() (*protocol.CredentialAssertion, string, error) {
 	opts, sessionData, err := m.wa.BeginDiscoverableLogin()

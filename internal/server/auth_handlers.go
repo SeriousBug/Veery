@@ -48,6 +48,39 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// handleAddDeviceBegin starts enrolling an additional passkey for the logged-in
+// user. No invite is needed; the ceremony is bound to the current session user.
+func (s *Server) handleAddDeviceBegin(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFrom(r.Context())
+	creds, err := s.store.CredentialsByUser(u.ID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	opts, cid, err := s.auth.BeginAddDevice(u.ID, u.Name, creds)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.setCeremonyCookie(w, cid)
+	writeJSON(w, http.StatusOK, opts)
+}
+
+// handleAddDeviceFinish stores the new passkey against the logged-in user.
+func (s *Server) handleAddDeviceFinish(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFrom(r.Context())
+	cid, err := s.ceremonyID(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.auth.FinishAddDevice(cid, u.ID, r); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 func (s *Server) handleLoginBegin(w http.ResponseWriter, r *http.Request) {
 	opts, cid, err := s.auth.BeginLogin()
 	if err != nil {
