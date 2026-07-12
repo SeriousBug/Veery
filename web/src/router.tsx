@@ -4,7 +4,10 @@ import {
   createRouter,
   Outlet,
 } from "@tanstack/react-router";
+import type { ComponentType } from "react";
 import { AppShell } from "./components/AppShell";
+import { AuthProvider } from "./auth/AuthProvider";
+import { RequireAuth } from "./auth/RequireAuth";
 import { Dashboard } from "./routes/Dashboard";
 import { Login } from "./routes/Login";
 import { Enroll } from "./routes/Enroll";
@@ -12,18 +15,31 @@ import { Settings } from "./routes/Settings";
 import { Invites } from "./routes/Invites";
 import { ServiceDetail } from "./routes/ServiceDetail";
 
+function protectedPage<P extends object>(Page: ComponentType<P>) {
+  return function Guarded(props: P) {
+    return (
+      <RequireAuth>
+        <AppShell>
+          <Page {...props} />
+        </AppShell>
+      </RequireAuth>
+    );
+  };
+}
+
 const rootRoute = createRootRoute({
   component: () => (
-    <AppShell>
+    <AuthProvider>
       <Outlet />
-    </AppShell>
+    </AuthProvider>
   ),
 });
 
+const ProtectedDashboard = protectedPage(Dashboard);
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: Dashboard,
+  component: ProtectedDashboard,
 });
 
 const loginRoute = createRoute({
@@ -44,24 +60,27 @@ const enrollRoute = createRoute({
   },
 });
 
+const ProtectedSettings = protectedPage(Settings);
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
-  component: Settings,
+  component: ProtectedSettings,
 });
 
+const ProtectedInvites = protectedPage(Invites);
 const invitesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/invites",
-  component: Invites,
+  component: ProtectedInvites,
 });
 
+const ProtectedServiceDetail = protectedPage(ServiceDetail);
 const serviceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/service/$id",
   component: function ServiceRoute() {
     const { id } = serviceRoute.useParams();
-    return <ServiceDetail id={id} />;
+    return <ProtectedServiceDetail id={id} />;
   },
 });
 

@@ -1,1 +1,7 @@
 @layer reset, base, tokens, recipes, utilities;
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
