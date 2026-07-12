@@ -359,6 +359,7 @@ function ToggleField({
       >
         <Switch.Thumb
           className={css({
+            display: "block",
             w: "5",
             h: "5",
             borderRadius: "full",

@@ -83,6 +83,10 @@ type HostMetrics struct {
 	Disks                []DiskUsage `json:"disks"`
 	DiskReadBytesPerSec  uint64      `json:"diskReadBytesPerSec"`
 	DiskWriteBytesPerSec uint64      `json:"diskWriteBytesPerSec"`
+	// Peaks are the highest read/write throughput ever recorded, persisted across
+	// restarts. The UI colours the current rate against these highwater marks.
+	DiskReadPeakBytesPerSec  uint64 `json:"diskReadPeakBytesPerSec"`
+	DiskWritePeakBytesPerSec uint64 `json:"diskWritePeakBytesPerSec"`
 }
 
 // ContainerMetrics is a snapshot of one container's resource use.

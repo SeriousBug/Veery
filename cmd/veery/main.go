@@ -142,6 +142,10 @@ func pollStacks(ctx context.Context, dkr *docker.Manager, st *store.Store) {
 // broadcasts it over the WS.
 func pollMetrics(ctx context.Context, dkr *docker.Manager, hub *server.Hub, st *store.Store) {
 	col := metrics.New()
+	readPeak, writePeak, err := st.LoadDiskIOPeaks()
+	if err != nil {
+		log.Printf("metrics: load disk I/O peaks: %v", err)
+	}
 	for {
 		t := time.NewTimer(pollInterval(st))
 		select {
@@ -154,6 +158,19 @@ func pollMetrics(ctx context.Context, dkr *docker.Manager, hub *server.Hub, st *
 		if err != nil {
 			log.Printf("metrics: host snapshot: %v", err)
 		}
+		if host.DiskReadBytesPerSec > readPeak || host.DiskWriteBytesPerSec > writePeak {
+			if host.DiskReadBytesPerSec > readPeak {
+				readPeak = host.DiskReadBytesPerSec
+			}
+			if host.DiskWriteBytesPerSec > writePeak {
+				writePeak = host.DiskWriteBytesPerSec
+			}
+			if err := st.SaveDiskIOPeaks(readPeak, writePeak); err != nil {
+				log.Printf("metrics: save disk I/O peaks: %v", err)
+			}
+		}
+		host.DiskReadPeakBytesPerSec = readPeak
+		host.DiskWritePeakBytesPerSec = writePeak
 		containers, err := dkr.ContainerStats(ctx)
 		if err != nil {
 			log.Printf("metrics: container stats: %v", err)

@@ -1,9 +1,17 @@
 import { Cpu, MemoryStick, HardDrive, Download, Upload, Activity } from "lucide-react";
-import { css } from "styled-system/css";
+import { css, cx } from "styled-system/css";
 import { grid, hstack, vstack } from "styled-system/patterns";
 import { Gauge } from "./Gauge";
 import { useLiveData } from "../live/LiveData";
-import { formatPercent, formatRate, formatUsage, ratioPct } from "../lib/format";
+import { formatPercent, formatRate, formatUsage, ratioPct, rateLevel } from "../lib/format";
+import type { RateLevel } from "../lib/format";
+
+const rateColorClass: Record<RateLevel, string> = {
+  idle: css({ color: "textMuted" }),
+  low: css({ color: "teal.600" }),
+  mid: css({ color: "sunshine.500" }),
+  high: css({ color: "coral.500" }),
+};
 
 export function HostResources() {
   const { metrics } = useLiveData();
@@ -57,11 +65,13 @@ export function HostResources() {
               icon={<Download size={16} className={css({ color: "teal.500" })} />}
               label="Reading"
               value={formatRate(host.diskReadBytesPerSec)}
+              level={rateLevel(host.diskReadBytesPerSec, host.diskReadPeakBytesPerSec)}
             />
             <Bandwidth
               icon={<Upload size={16} className={css({ color: "grape.500" })} />}
               label="Writing"
               value={formatRate(host.diskWriteBytesPerSec)}
+              level={rateLevel(host.diskWriteBytesPerSec, host.diskWritePeakBytesPerSec)}
             />
           </div>
         </div>
@@ -94,10 +104,12 @@ function Bandwidth({
   icon,
   label,
   value,
+  level,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
+  level: RateLevel;
 }) {
   return (
     <div className={vstack({ gap: "0.5", alignItems: "flex-start" })}>
@@ -105,7 +117,12 @@ function Bandwidth({
         {icon}
         {label}
       </span>
-      <span className={css({ fontSize: "xl", fontWeight: "extrabold", color: "text" })}>
+      <span
+        className={cx(
+          css({ fontSize: "xl", fontWeight: "extrabold", transition: "color 0.2s ease" }),
+          rateColorClass[level],
+        )}
+      >
         {value}
       </span>
     </div>

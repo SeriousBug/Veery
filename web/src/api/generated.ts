@@ -94,6 +94,12 @@ export interface HostMetrics {
   disks: DiskUsage[];
   diskReadBytesPerSec: number /* uint64 */;
   diskWriteBytesPerSec: number /* uint64 */;
+  /**
+   * Peaks are the highest read/write throughput ever recorded, persisted across
+   * restarts. The UI colours the current rate against these highwater marks.
+   */
+  diskReadPeakBytesPerSec: number /* uint64 */;
+  diskWritePeakBytesPerSec: number /* uint64 */;
 }
 /**
  * ContainerMetrics is a snapshot of one container's resource use.

@@ -37,6 +37,21 @@ export function ratioPct(used: number, total: number): number {
   return clampPct((used / total) * 100);
 }
 
+export type RateLevel = "idle" | "low" | "mid" | "high";
+
+/**
+ * Level of a throughput value relative to its all-time peak: idle, then warming
+ * from low through high as it approaches the highwater mark.
+ */
+export function rateLevel(value: number, peak: number): RateLevel {
+  if (!peak || peak <= 0 || value <= 0) return "idle";
+  const frac = value / peak;
+  if (frac >= 0.8) return "high";
+  if (frac >= 0.5) return "mid";
+  if (frac >= 0.2) return "low";
+  return "idle";
+}
+
 /** Friendly relative age from a unix-seconds timestamp. */
 export function formatAge(unixSeconds: number): string {
   if (!unixSeconds) return "unknown";
