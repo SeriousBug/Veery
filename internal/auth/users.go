@@ -50,6 +50,10 @@ func toWebauthnCredential(c store.StoredCredential) webauthn.Credential {
 		PublicKey:       c.PublicKey,
 		AttestationType: "none",
 		Transport:       transports,
+		Flags: webauthn.CredentialFlags{
+			BackupEligible: c.BackupEligible,
+			BackupState:    c.BackupState,
+		},
 		Authenticator: webauthn.Authenticator{
 			AAGUID:    c.AAGUID,
 			SignCount: c.SignCount,

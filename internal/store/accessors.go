@@ -96,21 +96,26 @@ type StoredCredential struct {
 	Transports []string
 	AAGUID     []byte
 	Name       string
-	CreatedAt  int64
+	// BackupEligible/BackupState mirror the WebAuthn BE/BS flags captured at
+	// registration. go-webauthn re-checks BE on every login and rejects a
+	// mismatch, so they must round-trip through the DB.
+	BackupEligible bool
+	BackupState    bool
+	CreatedAt      int64
 }
 
 // AddCredential stores a new passkey for a user.
 func (s *Store) AddCredential(c StoredCredential) error {
-	_, err := s.db.Exec(`INSERT INTO credentials(id,user_id,cred_id,public_key,sign_count,transports,aaguid,name,created_at)
-		VALUES(?,?,?,?,?,?,?,?,?)`,
+	_, err := s.db.Exec(`INSERT INTO credentials(id,user_id,cred_id,public_key,sign_count,transports,aaguid,name,backup_eligible,backup_state,created_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
 		c.ID, c.UserID, c.CredID, c.PublicKey, c.SignCount,
-		strings.Join(c.Transports, ","), c.AAGUID, c.Name, c.CreatedAt)
+		strings.Join(c.Transports, ","), c.AAGUID, c.Name, c.BackupEligible, c.BackupState, c.CreatedAt)
 	return err
 }
 
 // CredentialsByUser returns all passkeys for a user.
 func (s *Store) CredentialsByUser(userID string) ([]StoredCredential, error) {
-	rows, err := s.db.Query(`SELECT id,user_id,cred_id,public_key,sign_count,transports,aaguid,name,created_at
+	rows, err := s.db.Query(`SELECT id,user_id,cred_id,public_key,sign_count,transports,aaguid,name,backup_eligible,backup_state,created_at
 		FROM credentials WHERE user_id=? ORDER BY created_at`, userID)
 	if err != nil {
 		return nil, err
@@ -121,7 +126,7 @@ func (s *Store) CredentialsByUser(userID string) ([]StoredCredential, error) {
 
 // CredentialByCredID looks up a passkey by its raw credential id.
 func (s *Store) CredentialByCredID(credID []byte) (StoredCredential, error) {
-	rows, err := s.db.Query(`SELECT id,user_id,cred_id,public_key,sign_count,transports,aaguid,name,created_at
+	rows, err := s.db.Query(`SELECT id,user_id,cred_id,public_key,sign_count,transports,aaguid,name,backup_eligible,backup_state,created_at
 		FROM credentials WHERE cred_id=?`, credID)
 	if err != nil {
 		return StoredCredential{}, err
@@ -149,7 +154,7 @@ func scanCreds(rows *sql.Rows) ([]StoredCredential, error) {
 		var c StoredCredential
 		var transports string
 		if err := rows.Scan(&c.ID, &c.UserID, &c.CredID, &c.PublicKey, &c.SignCount,
-			&transports, &c.AAGUID, &c.Name, &c.CreatedAt); err != nil {
+			&transports, &c.AAGUID, &c.Name, &c.BackupEligible, &c.BackupState, &c.CreatedAt); err != nil {
 			return nil, err
 		}
 		if transports != "" {

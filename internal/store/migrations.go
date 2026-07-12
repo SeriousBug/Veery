@@ -20,6 +20,8 @@ var migrations = []string{
 		transports TEXT NOT NULL DEFAULT '',
 		aaguid BLOB,
 		name TEXT NOT NULL DEFAULT '',
+		backup_eligible INTEGER NOT NULL DEFAULT 0,
+		backup_state INTEGER NOT NULL DEFAULT 0,
 		created_at INTEGER NOT NULL
 	);`,
 	`CREATE TABLE invites (

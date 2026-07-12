@@ -194,11 +194,13 @@ func (m *Manager) FinishRegistration(ceremonyID, inviteToken string, r *http.Req
 		UserID:     cer.userID,
 		CredID:     cred.ID,
 		PublicKey:  cred.PublicKey,
-		SignCount:  cred.Authenticator.SignCount,
-		Transports: transports,
-		AAGUID:     cred.Authenticator.AAGUID,
-		Name:       "Passkey",
-		CreatedAt:  time.Now().Unix(),
+		SignCount:      cred.Authenticator.SignCount,
+		Transports:     transports,
+		AAGUID:         cred.Authenticator.AAGUID,
+		Name:           "Passkey",
+		BackupEligible: cred.Flags.BackupEligible,
+		BackupState:    cred.Flags.BackupState,
+		CreatedAt:      time.Now().Unix(),
 	})
 	if err != nil {
 		return "", err
@@ -264,11 +266,13 @@ func (m *Manager) FinishAddDevice(ceremonyID, userID string, r *http.Request) er
 		UserID:     cer.userID,
 		CredID:     cred.ID,
 		PublicKey:  cred.PublicKey,
-		SignCount:  cred.Authenticator.SignCount,
-		Transports: transports,
-		AAGUID:     cred.Authenticator.AAGUID,
-		Name:       "Passkey",
-		CreatedAt:  time.Now().Unix(),
+		SignCount:      cred.Authenticator.SignCount,
+		Transports:     transports,
+		AAGUID:         cred.Authenticator.AAGUID,
+		Name:           "Passkey",
+		BackupEligible: cred.Flags.BackupEligible,
+		BackupState:    cred.Flags.BackupState,
+		CreatedAt:      time.Now().Unix(),
 	})
 }
 
