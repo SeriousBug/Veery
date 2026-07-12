@@ -35,6 +35,28 @@ func main() {
 	}
 	defer st.Close()
 
+	// Recovery: `veery invite [--admin]` mints a fresh enrollment link from the
+	// host and exits. This is the account-recovery path if every passkey is
+	// lost — host access already equals full control via the Docker socket.
+	if len(os.Args) > 1 && os.Args[1] == "invite" {
+		isAdmin := true
+		for _, a := range os.Args[2:] {
+			if a == "--normal" {
+				isAdmin = false
+			}
+		}
+		token, _, err := auth.NewInvite(st, "", isAdmin)
+		if err != nil {
+			log.Fatalf("mint invite: %v", err)
+		}
+		kind := "admin"
+		if !isAdmin {
+			kind = "normal"
+		}
+		log.Printf("%s enrollment link (valid 24h, single use):\n\n    %s\n", kind, auth.InviteURL(origin, token))
+		return
+	}
+
 	authMgr, err := auth.NewManager(st, auth.Config{RPID: rpID, Origin: origin})
 	if err != nil {
 		log.Fatalf("auth manager: %v", err)

@@ -72,6 +72,19 @@ docker logs veery
 
 Put Veery behind your TLS proxy so the browser reaches `VEERY_ORIGIN` over HTTPS.
 
+### Recovering access (lost all passkeys)
+
+Passkeys have no password fallback, so if every enrolled device is lost you would
+otherwise be locked out. Because host access already equals full control (the Docker
+socket), you can mint a fresh enrollment link from the host and enroll a new passkey:
+
+```sh
+docker exec veery /veery invite            # admin link (default)
+docker exec veery /veery invite --normal   # non-admin link
+```
+
+The link is single-use and valid for 24 hours. Open it to register a new passkey.
+
 ## Security notes
 
 - **Docker socket access is root-equivalent on the host.** Anyone who can authenticate to Veery can
