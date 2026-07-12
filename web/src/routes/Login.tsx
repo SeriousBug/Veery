@@ -26,7 +26,7 @@ export function Login() {
       const credential = await startAuthentication({
         optionsJSON: options.publicKey,
       });
-      await http.post("/auth/login/finish", credential);
+      await http.post("/auth/login/finish", credential as unknown as Record<string, unknown>);
       await refresh();
       await navigate({ to: "/" });
     } catch (err) {

@@ -39,7 +39,7 @@ export function Enroll({ token }: { token: string }) {
         name: name.trim() || "My passkey",
       });
       const credential = await startRegistration({ optionsJSON: options.publicKey });
-      await http.post("/auth/register/finish", credential);
+      await http.post("/auth/register/finish", credential as unknown as Record<string, unknown>);
       await refresh();
       await navigate({ to: "/" });
     } catch (err) {

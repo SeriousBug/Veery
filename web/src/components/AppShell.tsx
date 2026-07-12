@@ -11,6 +11,8 @@ import {
 import { css } from "styled-system/css";
 import { flex, hstack } from "styled-system/patterns";
 import { useAuth } from "../auth/AuthProvider";
+import { LiveDataProvider } from "../live/LiveData";
+import { ToasterView } from "./ToasterView";
 
 const baseNavItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
@@ -36,6 +38,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
+    <LiveDataProvider>
     <div
       className={flex({
         direction: "column",
@@ -205,6 +208,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         {children}
       </main>
+      <ToasterView />
     </div>
+    </LiveDataProvider>
   );
 }
