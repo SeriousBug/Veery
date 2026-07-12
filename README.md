@@ -95,6 +95,20 @@ The link is single-use and valid for 24 hours. Open it to register a new passkey
 - Mount `/proc` and `/sys` read-only. The Docker socket must allow API calls (it cannot be read-only
   for write operations like start/stop), so treat access to Veery as access to the host.
 
+## Limitations and roadmap
+
+- **Private registries.** Image updates pull anonymously, so private images (private
+  GHCR/Docker Hub repos, self-hosted registries needing auth) can't be updated yet.
+  Per-registry credentials in settings are planned.
+- **No log viewer yet.** To diagnose *why* a service is down you still need
+  `docker logs <name>` on the host. An in-app log tail is planned.
+- **Snapshot drift.** Veery snapshots a container's spec when you first manage it. If you
+  later change that stack your usual way (new port, env, volume) and bring it up outside
+  Veery, Veery's snapshot is stale — re-run "Let Veery manage this" on it to refresh the
+  snapshot before using "Bring back up".
+- **Startup ordering.** Bringing a whole stack back up does not yet honor `depends_on`
+  ordering; services that depend on each other may need a moment (and a retry) to settle.
+
 ## Development
 
 Tooling versions are pinned in `.tool-versions` (Go, Node, pnpm). The frontend uses pnpm; a 7-day
