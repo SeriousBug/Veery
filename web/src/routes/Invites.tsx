@@ -511,7 +511,7 @@ export function Invites() {
                   <div className={hstack({ gap: "2", ml: "auto", flexShrink: 0 })}>
                     <button
                       onClick={() => resetUser.mutate(user.id)}
-                      disabled={resetUser.isPending}
+                      disabled={resetUser.isPending && resetUser.variables === user.id}
                       aria-label={`Reset access for ${user.name}`}
                       title="Reset access — mint a recovery link"
                       className={flex({
