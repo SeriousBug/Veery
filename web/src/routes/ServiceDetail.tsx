@@ -86,7 +86,7 @@ export function ServiceDetail({ id }: { id: string }) {
             onBringUp: () => stackAction(stack.id, "bringup"),
             onUpdate: () => {
               for (const c of stack.containers) {
-                if (c.updateAvailable) void containerAction(c.id, "update");
+                if (c.updateAvailable) void containerAction(c.containerName, "update");
               }
             },
           }}
@@ -186,11 +186,11 @@ function ContainerPanel({
           onStop: () => containerAction(container.id, "stop"),
           onRestart: () => containerAction(container.id, "restart"),
           onBringUp: () => containerAction(container.id, "start"),
-          onUpdate: () => containerAction(container.id, "update"),
+          onUpdate: () => containerAction(container.containerName, "update"),
         }}
       />
 
-      <AutoUpdateToggle containerId={container.id} autoUpdate={container.autoUpdate} />
+      <AutoUpdateToggle containerId={container.containerName} autoUpdate={container.autoUpdate} />
 
       <details className={css({ "& > summary": { listStyle: "none" } })}>
         <summary

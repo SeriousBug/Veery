@@ -98,11 +98,12 @@ func (s *Server) handleSetAutoUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad request")
 		return
 	}
-	if err := s.store.SetAutoUpdate(req.ContainerID, req.AutoUpdate); err != nil {
-		if isNotFound(err) {
-			writeErr(w, http.StatusNotFound, "container not managed")
-			return
-		}
+	mc, err := s.store.ResolveManaged(req.ContainerID)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "container not managed")
+		return
+	}
+	if err := s.store.SetAutoUpdate(mc.ID, req.AutoUpdate); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}

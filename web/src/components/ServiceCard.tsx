@@ -112,7 +112,7 @@ export function ServiceCard({
           onBringUp: () => stackAction(stack.id, "bringup"),
           onUpdate: () => {
             for (const c of stack.containers) {
-              if (c.updateAvailable) void containerAction(c.id, "update");
+              if (c.updateAvailable) void containerAction(c.containerName, "update");
             }
           },
         }}

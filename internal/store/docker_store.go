@@ -73,6 +73,15 @@ func (s *Store) ManagedByID(id string) (ManagedContainer, error) {
 	return mc, err
 }
 
+// ResolveManaged looks up a managed container by its managed id, falling back
+// to its container name. Both are stable identifiers the UI may send.
+func (s *Store) ResolveManaged(idOrName string) (ManagedContainer, error) {
+	if mc, err := s.ManagedByID(idOrName); err == nil {
+		return mc, nil
+	}
+	return s.ManagedByName(idOrName)
+}
+
 // ManagedByStack returns all managed containers in a stack.
 func (s *Store) ManagedByStack(stackID string) ([]ManagedContainer, error) {
 	rows, err := s.db.Query(`SELECT id,stack_id,container_name,snapshot_json,auto_update,created_at

@@ -5,7 +5,9 @@ import react from "@vitejs/plugin-react";
 const backend = "http://localhost:8080";
 
 export default defineConfig({
-  base: "./",
+  // Absolute base so hashed assets load from /assets/* on deep links like
+  // /service/foo (a relative base would resolve to /service/assets/* and 404).
+  base: "/",
   plugins: [react()],
   resolve: {
     alias: {
