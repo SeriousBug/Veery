@@ -12,6 +12,8 @@ import {
   type Target,
 } from "../lib/shoutrrr";
 
+const OVERVIEW_DOCS = "https://containrrr.dev/shoutrrr/v0.8/services/overview/";
+
 const inputStyle = css({
   px: "3",
   py: "2",
@@ -131,24 +133,22 @@ export function NotificationTarget({
             ))}
             <option value={CUSTOM_SCHEME}>Other (paste an address)</option>
           </select>
-          {spec && (
-            <a
-              href={spec.docs}
-              target="_blank"
-              rel="noreferrer"
-              title={`${spec.label} address format`}
-              className={hstack({
-                gap: "1",
-                fontSize: "xs",
-                fontWeight: "bold",
-                color: "textMuted",
-                _hover: { color: "accent" },
-              })}
-            >
-              Docs
-              <ExternalLink size={13} />
-            </a>
-          )}
+          <a
+            href={spec?.docs ?? OVERVIEW_DOCS}
+            target="_blank"
+            rel="noreferrer"
+            className={hstack({
+              gap: "1",
+              fontSize: "sm",
+              fontWeight: "bold",
+              color: "accent",
+              textDecoration: "underline",
+              whiteSpace: "nowrap",
+            })}
+          >
+            {spec ? `${spec.label} address format` : "All address formats"}
+            <ExternalLink size={13} className={css({ flexShrink: 0 })} />
+          </a>
         </span>
         {!disabled && (
           <button

@@ -65,7 +65,7 @@ export const SERVICES: ServiceSpec[] = [
     docs: DOCS("ntfy"),
     fields: [
       { name: "host", label: "Server", slot: "host", required: true, placeholder: "ntfy.sh" },
-      { name: "topic", label: "Topic", slot: "path1", required: true },
+      { name: "topic", label: "Topic", slot: "path", required: true },
       { name: "user", label: "Username", slot: "user", advanced: true },
       { name: "pass", label: "Password", slot: "pass", secret: true, advanced: true },
       {
@@ -191,8 +191,21 @@ export const SERVICES: ServiceSpec[] = [
     label: "Gotify",
     docs: DOCS("gotify"),
     fields: [
-      { name: "host", label: "Server", slot: "host", required: true, placeholder: "gotify.example.com" },
-      { name: "token", label: "App token", slot: "path1", required: true, secret: true },
+      {
+        name: "host",
+        label: "Server",
+        slot: "host",
+        required: true,
+        placeholder: "gotify.example.com",
+        hint: "Add :port if it is not on the default one.",
+      },
+      {
+        name: "subpath",
+        label: "Server subpath",
+        slot: "path",
+        hint: "Only if Gotify is not served from the root of the host.",
+      },
+      { name: "token", label: "App token", slot: "path2", required: true, secret: true },
       { name: "priority", label: "Priority", slot: "query", key: "priority", advanced: true },
       {
         name: "disabletls",
@@ -220,7 +233,14 @@ export const SERVICES: ServiceSpec[] = [
         advanced: true,
         hint: "Comma separated. Empty means all devices.",
       },
-      { name: "priority", label: "Priority", slot: "query", key: "priority", advanced: true },
+      {
+        name: "priority",
+        label: "Priority",
+        slot: "query",
+        key: "priority",
+        advanced: true,
+        options: ["", "-1", "0", "1"],
+      },
     ],
   },
   {
@@ -257,7 +277,7 @@ export const SERVICES: ServiceSpec[] = [
     docs: DOCS("email"),
     fields: [
       { name: "host", label: "SMTP server", slot: "host", required: true },
-      { name: "port", label: "Port", slot: "port", required: true, placeholder: "587" },
+      { name: "port", label: "Port", slot: "port", placeholder: "25" },
       { name: "from", label: "From address", slot: "query", key: "from", required: true },
       {
         name: "to",
@@ -306,12 +326,21 @@ export const SERVICES: ServiceSpec[] = [
       { name: "user", label: "Username", slot: "user", advanced: true },
       { name: "pass", label: "Password", slot: "pass", secret: true, advanced: true },
       {
+        name: "template",
+        label: "Payload",
+        slot: "query",
+        key: "template",
+        options: ["", "json"],
+        hint: "Empty posts the bare message. Pick json to post a JSON object.",
+      },
+      {
         name: "titlekey",
         label: "Title JSON key",
         slot: "query",
         key: "titlekey",
         advanced: true,
         placeholder: "title",
+        hint: "Only used when the payload is json.",
       },
       {
         name: "messagekey",
@@ -320,6 +349,7 @@ export const SERVICES: ServiceSpec[] = [
         key: "messagekey",
         advanced: true,
         placeholder: "message",
+        hint: "Only used when the payload is json.",
       },
       {
         name: "contenttype",
@@ -352,8 +382,9 @@ export const SERVICES: ServiceSpec[] = [
     label: "Bark",
     docs: DOCS("bark"),
     fields: [
-      { name: "devicekey", label: "Device key", slot: "user", required: true, secret: true },
+      { name: "devicekey", label: "Device key", slot: "pass", required: true, secret: true },
       { name: "host", label: "Server", slot: "host", required: true },
+      { name: "path", label: "Server subpath", slot: "path", advanced: true },
       { name: "sound", label: "Sound", slot: "query", key: "sound", advanced: true },
       { name: "group", label: "Group", slot: "query", key: "group", advanced: true },
       {
@@ -397,7 +428,7 @@ export const SERVICES: ServiceSpec[] = [
         name: "channel",
         label: "Channel or recipient",
         slot: "path3",
-        hint: "A channel name, or @user for a direct message.",
+        hint: "A channel name without the #, or @user for a direct message.",
       },
       { name: "user", label: "Override username", slot: "user", advanced: true },
     ],
@@ -430,7 +461,7 @@ export const SERVICES: ServiceSpec[] = [
       { name: "botmail", label: "Bot email", slot: "user", required: true },
       { name: "botkey", label: "Bot key", slot: "pass", required: true, secret: true },
       { name: "host", label: "Server", slot: "host", required: true },
-      { name: "stream", label: "Stream", slot: "query", key: "stream", required: true },
+      { name: "stream", label: "Stream", slot: "query", key: "stream" },
       { name: "topic", label: "Topic", slot: "query", key: "topic" },
     ],
   },
@@ -447,7 +478,7 @@ export const SERVICES: ServiceSpec[] = [
         placeholder: "api.opsgenie.com",
         hint: "Use api.eu.opsgenie.com for EU instances.",
       },
-      { name: "apikey", label: "API key", slot: "path1", required: true, secret: true },
+      { name: "apikey", label: "API key", slot: "path", required: true, secret: true },
       {
         name: "responders",
         label: "Responders",
@@ -455,7 +486,14 @@ export const SERVICES: ServiceSpec[] = [
         key: "responders",
         hint: "Comma separated, e.g. team:ops.",
       },
-      { name: "priority", label: "Priority", slot: "query", key: "priority", advanced: true },
+      {
+        name: "priority",
+        label: "Priority",
+        slot: "query",
+        key: "priority",
+        advanced: true,
+        options: ["", "P1", "P2", "P3", "P4", "P5"],
+      },
       { name: "tags", label: "Tags", slot: "query", key: "tags", advanced: true },
     ],
     defaults: { host: "api.opsgenie.com" },
@@ -465,12 +503,19 @@ export const SERVICES: ServiceSpec[] = [
     label: "Pushbullet",
     docs: DOCS("pushbullet"),
     fields: [
-      { name: "token", label: "API token", slot: "host", required: true, secret: true },
       {
-        name: "target",
-        label: "Target",
-        slot: "path1",
-        hint: "A device, #channel, or email address. Empty sends to all devices.",
+        name: "token",
+        label: "API token",
+        slot: "host",
+        required: true,
+        secret: true,
+        hint: "34 characters, starting with o.",
+      },
+      {
+        name: "targets",
+        label: "Targets",
+        slot: "path",
+        hint: "Devices, #channels or email addresses, separated by /. Empty sends to all devices.",
       },
     ],
   },
@@ -610,13 +655,14 @@ export function buildURL(t: Target): string {
   if (port) authority += `:${port}`;
 
   const segments: string[] = [];
-  const whole = slot("path");
-  if (whole) {
-    for (const part of whole.split("/")) if (part) segments.push(enc(part));
-  }
-  for (const s of ["path1", "path2", "path3"] as const) {
-    const v = slot(s);
-    if (v) segments.push(enc(v));
+  for (const f of pathFields(spec)) {
+    const v = (t.values[f.name] ?? "").trim();
+    if (!v) continue;
+    if (f.slot === "path") {
+      for (const part of v.split("/")) if (part) segments.push(enc(part));
+    } else {
+      segments.push(enc(v));
+    }
   }
   const path = segments.length ? `/${segments.join("/")}` : "";
 
@@ -631,6 +677,11 @@ export function buildURL(t: Target): string {
   const qs = query.toString();
 
   return `${spec.scheme}://${authority}${path}${qs ? `?${qs}` : ""}`;
+}
+
+/** Path fields in declaration order, which is the order they appear in the URL. */
+function pathFields(spec: ServiceSpec): FieldSpec[] {
+  return spec.fields.filter((f) => f.slot.startsWith("path"));
 }
 
 function enc(v: string): string {
@@ -665,20 +716,22 @@ export function parseURL(url: string): Target {
   const spec = serviceFor(scheme.toLowerCase());
   if (!spec) return custom();
 
+  // Services without a port field carry host and port together in the host value,
+  // matching shoutrrr's `url:"host,port"` tags.
   let host = hostPort ?? "";
   let port = "";
-  const colon = host.lastIndexOf(":");
-  if (colon !== -1) {
-    port = host.slice(colon + 1);
-    host = host.slice(0, colon);
+  if (spec.fields.some((f) => f.slot === "port")) {
+    const colon = host.lastIndexOf(":");
+    if (colon !== -1) {
+      port = host.slice(colon + 1);
+      host = host.slice(0, colon);
+    }
   }
 
   const segments = (path ?? "").split("/").filter(Boolean).map(dec);
   const params = new URLSearchParams(query ?? "");
 
   const t: Target = { id: nextID(), scheme: spec.scheme, values: {}, extraQuery: {}, raw };
-  const pathFields = spec.fields.filter((f) => f.slot.startsWith("path") && f.slot !== "path");
-  const wholePathField = spec.fields.find((f) => f.slot === "path");
 
   for (const f of spec.fields) {
     switch (f.slot) {
@@ -695,25 +748,28 @@ export function parseURL(url: string): Target {
       case "port":
         t.values[f.name] = port;
         break;
-      case "path":
-        break;
-      case "path1":
-      case "path2":
-      case "path3": {
-        const idx = Number(f.slot.slice(4)) - 1;
-        t.values[f.name] = segments[idx] ?? "";
-        break;
-      }
       case "query":
         t.values[f.name] = f.key ? (params.get(f.key) ?? "") : "";
+        break;
+      default:
         break;
     }
   }
 
-  if (wholePathField) {
-    // Whole-path services take every segment the indexed fields did not claim.
-    const rest = segments.slice(0, segments.length - pathFields.length || undefined);
-    t.values[wholePathField.name] = rest.length ? `/${rest.join("/")}` : "";
+  // A `path` field is variadic: it takes the segments the fixed ones leave behind.
+  const paths = pathFields(spec);
+  const variadic = paths.findIndex((f) => f.slot === "path");
+  const leading = variadic === -1 ? paths : paths.slice(0, variadic);
+  const trailing = variadic === -1 ? [] : paths.slice(variadic + 1);
+  leading.forEach((f, i) => {
+    t.values[f.name] = segments[i] ?? "";
+  });
+  trailing.forEach((f, i) => {
+    t.values[f.name] = segments[segments.length - trailing.length + i] ?? "";
+  });
+  if (variadic !== -1) {
+    const middle = segments.slice(leading.length, segments.length - trailing.length);
+    t.values[paths[variadic].name] = middle.length ? `/${middle.join("/")}` : "";
   }
 
   const known = new Set(
