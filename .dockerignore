@@ -1,0 +1,8 @@
+.git
+**/node_modules
+web/node_modules
+web/styled-system
+*.db
+*.db-wal
+*.db-shm
+scratchpad

@@ -1,0 +1,14 @@
+# Go
+/veery
+*.db
+*.db-wal
+*.db-shm
+
+# Frontend
+web/node_modules
+web/styled-system
+
+# Built SPA (produced by `pnpm build`; embedded at image build time).
+# Keep the directory (via .gitkeep) so `//go:embed all:dist` compiles.
+web/dist/*
+!web/dist/.gitkeep

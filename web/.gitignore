@@ -1,0 +1,7 @@
+node_modules
+styled-system
+
+# dist is embedded by Go; keep the placeholder index.html, ignore build output
+dist/assets
+dist/*.js
+dist/*.css
