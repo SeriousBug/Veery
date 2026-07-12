@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
@@ -65,17 +66,26 @@ func (m *Manager) recreate(ctx context.Context, snap Snapshot, newImage string) 
 	}
 
 	// ContainerCreate accepts a single primary network in NetworkingConfig on
-	// older API versions; connect any extra networks after creation.
+	// older API versions; connect any extra networks after creation. The primary
+	// is chosen deterministically (a compose default network, else the
+	// lexicographically smallest name) so multi-network containers come back with
+	// the same default routing every time rather than a map-iteration order.
+	names := make([]string, 0, len(snap.NetworkingConfig.EndpointsConfig))
+	for name := range snap.NetworkingConfig.EndpointsConfig {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	primaryName := primaryNetwork(snap, names)
+
 	primary := &network.NetworkingConfig{EndpointsConfig: map[string]*network.EndpointSettings{}}
 	var extra []struct {
 		name string
 		ep   *network.EndpointSettings
 	}
-	first := true
-	for name, ep := range snap.NetworkingConfig.EndpointsConfig {
-		if first {
+	for _, name := range names {
+		ep := sanitizeEndpoint(snap.NetworkingConfig.EndpointsConfig[name])
+		if name == primaryName {
 			primary.EndpointsConfig[name] = ep
-			first = false
 			continue
 		}
 		extra = append(extra, struct {
@@ -95,4 +105,45 @@ func (m *Manager) recreate(ctx context.Context, snap Snapshot, newImage string) 
 		return resp.ID, err
 	}
 	return resp.ID, nil
+}
+
+// primaryNetwork picks the deterministic primary network from sorted endpoint
+// names: a compose "default" network if the container has one, otherwise the
+// lexicographically smallest name. names must be sorted.
+func primaryNetwork(snap Snapshot, names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	suffix := "_default"
+	if snap.Project != "" {
+		if _, ok := snap.NetworkingConfig.EndpointsConfig[snap.Project+suffix]; ok {
+			return snap.Project + suffix
+		}
+	}
+	for _, name := range names {
+		if name == "default" || strings.HasSuffix(name, suffix) {
+			return name
+		}
+	}
+	return names[0]
+}
+
+// sanitizeEndpoint copies an endpoint config, dropping runtime-only fields that
+// conflict on recreate (assigned IP/gateway/MAC) while keeping static IP
+// requests (IPAMConfig) and network aliases.
+func sanitizeEndpoint(ep *network.EndpointSettings) *network.EndpointSettings {
+	if ep == nil {
+		return nil
+	}
+	clean := *ep
+	clean.NetworkID = ""
+	clean.EndpointID = ""
+	clean.IPAddress = ""
+	clean.Gateway = ""
+	clean.IPPrefixLen = 0
+	clean.MacAddress = ""
+	clean.IPv6Gateway = ""
+	clean.GlobalIPv6Address = ""
+	clean.GlobalIPv6PrefixLen = 0
+	return &clean
 }
