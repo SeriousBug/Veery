@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # --- Stage 1: build the SPA ---
-FROM node:26-alpine AS web
+FROM --platform=$BUILDPLATFORM node:26-alpine AS web
 WORKDIR /app/web
 # Node 26 no longer bundles corepack; install the pinned pnpm directly.
 RUN npm install -g pnpm@10.20.0
@@ -13,7 +13,9 @@ COPY web/ ./
 RUN pnpm build
 
 # --- Stage 2: build the static Go binary embedding the SPA ---
-FROM golang:1.26-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -21,7 +23,9 @@ COPY . .
 # Replace the committed dist placeholder with the freshly built SPA.
 RUN rm -rf web/dist
 COPY --from=web /app/web/dist ./web/dist
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /veery ./cmd/veery
+# Everything is pure Go, so cross-compile on the build host rather than emulating.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -o /veery ./cmd/veery
 # Create the data dir so it can be owned by the nonroot runtime user; a mounted
 # named volume inherits this ownership.
 RUN mkdir -p /data
