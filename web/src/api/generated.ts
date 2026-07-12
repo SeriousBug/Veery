@@ -94,6 +94,12 @@ export interface DiskUsage {
 export interface DiskActivity {
   key: string;
   device: string;
+  /**
+   * Label names the volumes backed by this device (e.g. "Main disk"), derived
+   * from /proc on Linux. Empty when the device can't be tied to a mount (e.g.
+   * macOS synthesized APFS containers); the UI then falls back to Device.
+   */
+  label: string;
   readBytesPerSec: number /* uint64 */;
   writeBytesPerSec: number /* uint64 */;
   readPeakBytesPerSec: number /* uint64 */;

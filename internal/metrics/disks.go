@@ -157,6 +157,53 @@ func listDeviceNames() []string {
 	return names
 }
 
+// partitionToWhole reduces a partition name to its whole disk. Each pattern
+// captures the whole-disk portion (sda1→sda, nvme0n1p2→nvme0n1, mmcblk0p1→mmcblk0).
+var partitionToWhole = []*regexp.Regexp{
+	regexp.MustCompile(`^([a-z]+vd[a-z]+|sd[a-z]+|vd[a-z]+|hd[a-z]+)[0-9]+$`),
+	regexp.MustCompile(`^(nvme[0-9]+n[0-9]+)p[0-9]+$`),
+	regexp.MustCompile(`^(mmcblk[0-9]+)p[0-9]+$`),
+}
+
+// wholeDiskOf reduces a mount's device path to the whole physical device name
+// that IOCounters reports for it (/dev/sda2 → sda). Names it can't reduce (like
+// macOS synthesized APFS devices) are returned as-is and simply won't match.
+func wholeDiskOf(device string) string {
+	name := path.Base(strings.TrimPrefix(device, "/dev/"))
+	for _, re := range partitionToWhole {
+		if m := re.FindStringSubmatch(name); m != nil {
+			return m[1]
+		}
+	}
+	return name
+}
+
+// deviceLabels ties each physical device to the volumes mounted on it, so the
+// dashboard can show "Main disk" instead of a bare "sda". Devices that can't be
+// tied to a mount are absent from the result (the UI falls back to the name).
+func deviceLabels(mounts []MountUsage, devices []DeviceIO) map[string]string {
+	byDevice := map[string][]string{}
+	seen := map[string]bool{}
+	for _, m := range mounts {
+		if m.Device == "" {
+			continue
+		}
+		whole := wholeDiskOf(m.Device)
+		label := mountLabel(m.Mount)
+		if k := whole + "\x00" + label; !seen[k] {
+			seen[k] = true
+			byDevice[whole] = append(byDevice[whole], label)
+		}
+	}
+	out := map[string]string{}
+	for _, d := range devices {
+		if names := byDevice[d.Device]; len(names) > 0 {
+			out[d.Device] = strings.Join(names, ", ")
+		}
+	}
+	return out
+}
+
 // Visibility key helpers keep capacity mounts and activity devices in separate
 // namespaces so they never collide in the overrides map.
 func MountKey(mount string) string   { return "mount:" + mount }

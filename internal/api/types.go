@@ -81,8 +81,12 @@ type DiskUsage struct {
 // highest rates ever recorded for that device, persisted across restarts; the
 // UI colours the current rate against these highwater marks.
 type DiskActivity struct {
-	Key                  string `json:"key"`
-	Device               string `json:"device"`
+	Key    string `json:"key"`
+	Device string `json:"device"`
+	// Label names the volumes backed by this device (e.g. "Main disk"), derived
+	// from /proc on Linux. Empty when the device can't be tied to a mount (e.g.
+	// macOS synthesized APFS containers); the UI then falls back to Device.
+	Label                string `json:"label"`
 	ReadBytesPerSec      uint64 `json:"readBytesPerSec"`
 	WriteBytesPerSec     uint64 `json:"writeBytesPerSec"`
 	ReadPeakBytesPerSec  uint64 `json:"readPeakBytesPerSec"`

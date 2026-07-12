@@ -114,12 +114,13 @@ function DiskLabel({ mount }: { mount: string }) {
 }
 
 function DiskActivityRow({ activity, single }: { activity: DiskActivity; single: boolean }) {
+  const title = activity.label || (single ? "" : activity.device);
   return (
     <div className={vstack({ gap: "2", alignItems: "flex-start", minW: "0" })}>
-      {!single && (
+      {title && (
         <span className={hstack({ gap: "1.5", fontSize: "sm", fontWeight: "extrabold", color: "text" })}>
           <HardDrive size={15} className={css({ color: "textMuted" })} />
-          {activity.device}
+          {title}
         </span>
       )}
       <div className={hstack({ gap: "6", flexWrap: "wrap" })}>

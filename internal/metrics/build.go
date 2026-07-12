@@ -61,6 +61,7 @@ func BuildHostMetrics(s Sample, overrides map[string]bool, peaks map[string]Devi
 		out.Disks = out.Disks[:maxDisks]
 	}
 
+	labels := deviceLabels(s.Mounts, s.Devices)
 	for _, d := range s.Devices {
 		key := DeviceKey(d.Device)
 		if !eff[key] {
@@ -70,6 +71,7 @@ func BuildHostMetrics(s Sample, overrides map[string]bool, peaks map[string]Devi
 		out.DiskActivity = append(out.DiskActivity, api.DiskActivity{
 			Key:                  key,
 			Device:               deviceLabel(d.Device),
+			Label:                labels[d.Device],
 			ReadBytesPerSec:      d.ReadPerSec,
 			WriteBytesPerSec:     d.WritePerSec,
 			ReadPeakBytesPerSec:  p.Read,
@@ -120,13 +122,18 @@ func BuildDiskItems(mounts []MountUsage, devices []DeviceIO, overrides map[strin
 			DefaultShown: defaults[key],
 		})
 	}
+	labels := deviceLabels(mounts, devices)
 	for _, d := range devices {
 		key := DeviceKey(d.Device)
+		detail := "Read / write activity"
+		if v := labels[d.Device]; v != "" {
+			detail = v
+		}
 		items = append(items, api.DiskItem{
 			Key:          key,
 			Kind:         api.DiskActivityKind,
 			Label:        deviceLabel(d.Device),
-			Detail:       "Read / write activity",
+			Detail:       detail,
 			Shown:        eff[key],
 			DefaultShown: defaults[key],
 		})
