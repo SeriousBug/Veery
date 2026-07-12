@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -117,6 +118,114 @@ func TestIntegrationLifecycle(t *testing.T) {
 	t.Cleanup(func() {
 		_ = m.cli.ContainerRemove(context.Background(), newCID, container.RemoveOptions{Force: true})
 	})
+}
+
+// TestIntegrationUpdateRollback verifies the transactional update path: pointing
+// a managed container's snapshot at an image that exits immediately must fail
+// verification and roll back to the original, still-running container.
+func TestIntegrationUpdateRollback(t *testing.T) {
+	ctx := context.Background()
+
+	dbPath := filepath.Join(t.TempDir(), "veery.db")
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	m, err := NewManager(st, nil)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	defer m.Close()
+
+	if err := m.Ping(ctx); err != nil {
+		t.Skipf("docker daemon unreachable, skipping: %v", err)
+	}
+
+	const project = "veeryrollback"
+	name := fmt.Sprintf("veeryrollback-%d", time.Now().UnixNano())
+
+	ensureImage(t, m, ctx, "busybox:latest")
+	ensureImage(t, m, ctx, "alpine:latest")
+
+	created, err := m.cli.ContainerCreate(ctx, &container.Config{
+		Image: "busybox:latest",
+		Cmd:   []string{"sh", "-c", "sleep 3600"},
+		Labels: map[string]string{
+			projectLabel: project,
+			serviceLabel: "sleeper",
+		},
+	}, &container.HostConfig{}, nil, nil, name)
+	if err != nil {
+		t.Fatalf("create container: %v", err)
+	}
+	cid := created.ID
+	t.Cleanup(func() {
+		_ = m.cli.ContainerRemove(context.Background(), cid, container.RemoveOptions{Force: true})
+		_ = m.cli.ContainerRemove(context.Background(), name, container.RemoveOptions{Force: true})
+		_ = m.cli.ContainerRemove(context.Background(), name+oldSuffix, container.RemoveOptions{Force: true})
+		_ = st.Unadopt(project)
+	})
+	if err := m.cli.ContainerStart(ctx, cid, container.StartOptions{}); err != nil {
+		t.Fatalf("start container: %v", err)
+	}
+
+	if err := m.Adopt(ctx, project); err != nil {
+		t.Fatalf("adopt: %v", err)
+	}
+	mc, err := m.st.ManagedByName(name)
+	if err != nil {
+		t.Fatalf("managed lookup: %v", err)
+	}
+
+	origInsp, err := m.cli.ContainerInspect(ctx, name)
+	if err != nil {
+		t.Fatalf("inspect original: %v", err)
+	}
+	origImageID := origInsp.Image
+
+	// Point the snapshot at a different image whose command exits immediately so
+	// the recreated container fails verification.
+	snap, err := parseSnapshot(mc.SnapshotJSON)
+	if err != nil {
+		t.Fatalf("parse snapshot: %v", err)
+	}
+	snap.Image = "alpine:latest"
+	snap.Config.Image = "alpine:latest"
+	snap.Config.Cmd = []string{"sh", "-c", "exit 1"}
+	js, err := snap.marshal()
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+	if err := m.st.UpdateSnapshot(mc.ID, js); err != nil {
+		t.Fatalf("update snapshot: %v", err)
+	}
+	mc, _ = m.st.ManagedByID(mc.ID)
+
+	err = m.doUpdate(ctx, mc, func(phase, msg string) {})
+	if err == nil {
+		t.Fatalf("expected update to fail and roll back, got nil error")
+	}
+	if !strings.Contains(err.Error(), "rolled back") {
+		t.Fatalf("expected rollback error, got: %v", err)
+	}
+
+	// The original container must be back under its name, running, on its
+	// original image, with no parked leftover.
+	restored, err := m.cli.ContainerInspect(ctx, name)
+	if err != nil {
+		t.Fatalf("inspect restored: %v", err)
+	}
+	if !restored.State.Running {
+		t.Fatalf("original container not running after rollback (state %s)", restored.State.Status)
+	}
+	if restored.Image != origImageID {
+		t.Fatalf("image not restored: got %s want %s", restored.Image, origImageID)
+	}
+	if _, err := m.cli.ContainerInspect(ctx, name+oldSuffix); err == nil {
+		t.Fatalf("parked container %s should have been removed after rollback", name+oldSuffix)
+	}
 }
 
 func ensureImage(t *testing.T, m *Manager, ctx context.Context, ref string) {
