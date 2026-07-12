@@ -9,21 +9,21 @@ import "context"
 // StartJob starts a container by id/name, reporting progress.
 func (m *Manager) StartJob(ctx context.Context, id string) {
 	m.job(ctx, "start", id, func(emit func(phase, msg string)) error {
-		return m.Start(ctx, id)
+		return m.withContainerLock(ctx, id, func() error { return m.Start(ctx, id) })
 	})
 }
 
 // StopJob stops a container, reporting progress.
 func (m *Manager) StopJob(ctx context.Context, id string) {
 	m.job(ctx, "stop", id, func(emit func(phase, msg string)) error {
-		return m.Stop(ctx, id)
+		return m.withContainerLock(ctx, id, func() error { return m.Stop(ctx, id) })
 	})
 }
 
 // RestartJob restarts a container, reporting progress.
 func (m *Manager) RestartJob(ctx context.Context, id string) {
 	m.job(ctx, "restart", id, func(emit func(phase, msg string)) error {
-		return m.Restart(ctx, id)
+		return m.withContainerLock(ctx, id, func() error { return m.Restart(ctx, id) })
 	})
 }
 

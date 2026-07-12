@@ -5,6 +5,8 @@ package docker
 
 import (
 	"context"
+	"strings"
+	"sync"
 
 	"github.com/SeriousBug/Veery/internal/api"
 	"github.com/SeriousBug/Veery/internal/store"
@@ -21,6 +23,17 @@ type Manager struct {
 	cli *client.Client
 	st  *store.Store
 	pub Publisher
+
+	// availMu guards updateAvail, the in-memory "update available" flag per
+	// container name, refreshed by the update-check poller.
+	availMu     sync.Mutex
+	updateAvail map[string]bool
+
+	// locksMu guards locks, a per-container-name mutex map so updates,
+	// auto-updates and lifecycle actions never act on the same container
+	// concurrently.
+	locksMu sync.Mutex
+	locks   map[string]*sync.Mutex
 }
 
 // NewManager builds a Docker Manager from the ambient environment
@@ -30,7 +43,52 @@ func NewManager(st *store.Store, pub Publisher) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Manager{cli: cli, st: st, pub: pub}, nil
+	return &Manager{
+		cli:         cli,
+		st:          st,
+		pub:         pub,
+		updateAvail: map[string]bool{},
+		locks:       map[string]*sync.Mutex{},
+	}, nil
+}
+
+// containerLock returns the mutex for a container name, creating it on first use.
+func (m *Manager) containerLock(name string) *sync.Mutex {
+	m.locksMu.Lock()
+	defer m.locksMu.Unlock()
+	l, ok := m.locks[name]
+	if !ok {
+		l = &sync.Mutex{}
+		m.locks[name] = l
+	}
+	return l
+}
+
+// withContainerLock resolves ref to a container name and runs fn under that
+// container's lock. If the ref can't be inspected, ref itself is used as the key.
+func (m *Manager) withContainerLock(ctx context.Context, ref string, fn func() error) error {
+	name := ref
+	if insp, err := m.cli.ContainerInspect(ctx, ref); err == nil {
+		name = strings.TrimPrefix(insp.Name, "/")
+	}
+	l := m.containerLock(name)
+	l.Lock()
+	defer l.Unlock()
+	return fn()
+}
+
+// setUpdateAvailable records whether a container has a newer image available.
+func (m *Manager) setUpdateAvailable(name string, avail bool) {
+	m.availMu.Lock()
+	m.updateAvail[name] = avail
+	m.availMu.Unlock()
+}
+
+// updateAvailableFor reports the last-known update-available flag for a container.
+func (m *Manager) updateAvailableFor(name string) bool {
+	m.availMu.Lock()
+	defer m.availMu.Unlock()
+	return m.updateAvail[name]
 }
 
 // Ping checks connectivity to the daemon.

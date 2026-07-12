@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,7 +64,18 @@ func (m *Manager) ListStacks(ctx context.Context) ([]api.Stack, error) {
 			}
 		}
 		st := getStack(proj)
-		st.Containers = append(st.Containers, buildContainer(c, name, isManaged, mc))
+		cont := buildContainer(c, name, isManaged, mc)
+		if isManaged {
+			cont.UpdateAvailable = m.updateAvailableFor(name)
+		}
+		// RestartCount is only interesting for troubled containers, so inspect
+		// (one extra call) just for those rather than for every container.
+		if cont.Status == api.StatusNeedsAttention {
+			if insp, ierr := m.cli.ContainerInspect(ctx, c.ID); ierr == nil {
+				cont.RestartCount = insp.RestartCount
+			}
+		}
+		st.Containers = append(st.Containers, cont)
 	}
 
 	// Managed containers not present live are "missing" (removed / host reboot).
@@ -117,7 +129,7 @@ func buildContainer(c container.Summary, name string, managed bool, mc store.Man
 		ContainerName: name,
 		Image:         c.Image,
 		State:         c.State,
-		Status:        mapStatus(c.State, health),
+		Status:        mapStatus(c.State, health, exitCodeFromStatus(c.Status)),
 		Health:        health,
 		Managed:       managed,
 		AutoUpdate:    mc.AutoUpdate,
@@ -125,7 +137,25 @@ func buildContainer(c container.Summary, name string, managed bool, mc store.Man
 	}
 }
 
-func mapStatus(state, health string) api.ContainerStatus {
+// exitCodeFromStatus parses the exit code out of a summary status string like
+// "Exited (137) 2 minutes ago". Returns -1 when no exit code is present.
+func exitCodeFromStatus(status string) int {
+	open := strings.IndexByte(status, '(')
+	if open < 0 {
+		return -1
+	}
+	close := strings.IndexByte(status[open:], ')')
+	if close < 0 {
+		return -1
+	}
+	code, err := strconv.Atoi(strings.TrimSpace(status[open+1 : open+close]))
+	if err != nil {
+		return -1
+	}
+	return code
+}
+
+func mapStatus(state, health string, exitCode int) api.ContainerStatus {
 	switch state {
 	case "running":
 		if health == "unhealthy" {
@@ -134,7 +164,14 @@ func mapStatus(state, health string) api.ContainerStatus {
 		return api.StatusRunning
 	case "restarting", "dead":
 		return api.StatusNeedsAttention
-	case "paused", "exited", "created", "removing":
+	case "exited":
+		// A non-zero exit is a crash: surface it as needing attention. A clean
+		// exit (0) is an intentional stop.
+		if exitCode > 0 {
+			return api.StatusNeedsAttention
+		}
+		return api.StatusStopped
+	case "paused", "created", "removing":
 		return api.StatusStopped
 	default:
 		return api.StatusStopped

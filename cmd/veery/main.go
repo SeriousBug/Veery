@@ -89,6 +89,7 @@ func main() {
 		go pollStacks(ctx, dkr, st)
 		go pollMetrics(ctx, dkr, srv.Hub(), st)
 		go dkr.AutoUpdatePoller(ctx)
+		go dkr.UpdateCheckPoller(ctx)
 	}
 
 	httpServer := &http.Server{
