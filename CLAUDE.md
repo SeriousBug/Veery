@@ -22,6 +22,9 @@ static Go binary with the web UI embedded (distroless/static base).
 - `internal/auth/` — WebAuthn, invites, sessions, users.
 - `internal/store/` — SQLite persistence (`accessors.go`).
 - `internal/docker/`, `internal/metrics/` — container management and host/container metrics.
+- `internal/notify/` — notifications via Shoutrrr service URLs (Discord, ntfy, Slack, webhooks, ...).
+  Config comes from `VEERY_NOTIFY_URLS`/`VEERY_NOTIFY_EVENTS` or, unset, from the DB and the UI.
+  Targets hold webhook tokens, so the routes are `requireAdmin` and URLs are redacted in logs.
 - `web/src/routes/` — page components. `web/src/api/http.ts` — fetch wrapper (`http.get/post/put/del`).
   `web/src/auth/AuthProvider.tsx` — `useAuth()` gives the current `user`.
 - `web/embed.go` — embeds `web/dist` into the Go binary via `//go:embed`.

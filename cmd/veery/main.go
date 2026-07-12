@@ -16,6 +16,7 @@ import (
 	"github.com/SeriousBug/Veery/internal/auth"
 	"github.com/SeriousBug/Veery/internal/docker"
 	"github.com/SeriousBug/Veery/internal/metrics"
+	"github.com/SeriousBug/Veery/internal/notify"
 	"github.com/SeriousBug/Veery/internal/server"
 	"github.com/SeriousBug/Veery/internal/store"
 )
@@ -74,6 +75,9 @@ func main() {
 		Secure: strings.HasPrefix(origin, "https://"),
 	})
 
+	notifier := notify.New(st)
+	srv.SetNotifier(notifier)
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -83,6 +87,7 @@ func main() {
 	} else {
 		defer dkr.Close()
 		srv.SetDocker(dkr)
+		dkr.SetNotifier(notifier)
 		if err := dkr.Ping(ctx); err != nil {
 			log.Printf("warning: docker daemon unreachable: %v", err)
 		}

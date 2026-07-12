@@ -19,6 +19,13 @@ import (
 // testServer spins up a full Server backed by a temp SQLite DB and an httptest
 // server, returning it plus the RP config matching the server URL.
 func testServer(t *testing.T) (*httptest.Server, *store.Store, *http.Client) {
+	ts, st, client, _ := testServerWith(t)
+	return ts, st, client
+}
+
+// testServerWith is testServer, also handing back the Server so a test can
+// attach dependencies like the notifier.
+func testServerWith(t *testing.T) (*httptest.Server, *store.Store, *http.Client, *Server) {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 	st, err := store.Open(dbPath)
@@ -43,7 +50,7 @@ func testServer(t *testing.T) (*httptest.Server, *store.Store, *http.Client) {
 
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{Jar: jar}
-	return ts, st, client
+	return ts, st, client, srv
 }
 
 func post(t *testing.T, client *http.Client, url string, body []byte) (*http.Response, []byte) {

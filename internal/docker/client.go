@@ -20,14 +20,24 @@ type Publisher interface {
 
 // Manager is the Docker service used by the server.
 type Manager struct {
-	cli *client.Client
-	st  *store.Store
-	pub Publisher
+	cli   *client.Client
+	st    *store.Store
+	pub   Publisher
+	notif Notifier
 
 	// availMu guards updateAvail, the in-memory "update available" flag per
-	// container name, refreshed by the update-check poller.
-	availMu     sync.Mutex
-	updateAvail map[string]bool
+	// container name, refreshed by the update-check poller. availBaseline says
+	// whether the flags recorded by the previous run have been loaded.
+	availMu       sync.Mutex
+	updateAvail   map[string]bool
+	availBaseline bool
+
+	// statusMu guards the last-seen status of every managed container, which
+	// the stack sweep diffs against to notify on transitions. statusBaseline
+	// says whether a first sweep has landed.
+	statusMu       sync.Mutex
+	lastStatus     map[string]api.ContainerStatus
+	statusBaseline bool
 
 	// locksMu guards locks, a per-container-name mutex map so updates,
 	// auto-updates and lifecycle actions never act on the same container
@@ -48,6 +58,7 @@ func NewManager(st *store.Store, pub Publisher) (*Manager, error) {
 		st:          st,
 		pub:         pub,
 		updateAvail: map[string]bool{},
+		lastStatus:  map[string]api.ContainerStatus{},
 		locks:       map[string]*sync.Mutex{},
 	}, nil
 }

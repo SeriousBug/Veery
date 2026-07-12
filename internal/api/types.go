@@ -206,6 +206,58 @@ type Settings struct {
 	DiskVisibility map[string]bool `json:"diskVisibility"`
 }
 
+// NotificationEvent names a kind of event that can be delivered to the
+// configured notification channels.
+type NotificationEvent string
+
+const (
+	// EventUpdateApplied fires when an auto-update or a manual update finishes,
+	// whether it succeeded or was rolled back.
+	EventUpdateApplied NotificationEvent = "update_applied"
+	// EventUpdateAvailable fires when a newer image appears for a managed
+	// container that does not have auto-update enabled.
+	EventUpdateAvailable NotificationEvent = "update_available"
+	// EventContainerStatus fires when a managed container changes status, e.g.
+	// starts crash-looping, goes unhealthy, disappears, or recovers.
+	EventContainerStatus NotificationEvent = "container_status"
+	// EventAuth fires on passkey enrollment, logins and other account changes.
+	EventAuth NotificationEvent = "auth"
+)
+
+// AllNotificationEvents lists every event in display order.
+var AllNotificationEvents = []NotificationEvent{
+	EventContainerStatus,
+	EventUpdateApplied,
+	EventUpdateAvailable,
+	EventAuth,
+}
+
+// NotificationConfig is where notifications go and which events are sent.
+type NotificationConfig struct {
+	// URLs are Shoutrrr service URLs, one per target, e.g.
+	// "discord://token@channel" or "ntfy://ntfy.sh/my-topic". They carry
+	// credentials, so this config is admin-only.
+	URLs []string `json:"urls"`
+	// Events maps each NotificationEvent to whether it is delivered. Events
+	// absent from the map are treated as enabled.
+	Events map[NotificationEvent]bool `json:"events"`
+	// EnvManaged reports that the config comes from VEERY_NOTIFY_URLS and so
+	// cannot be edited through the UI.
+	EnvManaged bool `json:"envManaged"`
+}
+
+// Enabled reports whether an event should be delivered.
+func (c NotificationConfig) Enabled(ev NotificationEvent) bool {
+	on, ok := c.Events[ev]
+	return !ok || on
+}
+
+// TestNotificationRequest sends a test message. URLs, when non-empty, are used
+// instead of the saved ones so a channel can be checked before it is saved.
+type TestNotificationRequest struct {
+	URLs []string `json:"urls"`
+}
+
 // SetDiskVisibilityRequest updates which disks are shown, for all users.
 type SetDiskVisibilityRequest struct {
 	Visibility map[string]bool `json:"visibility"`

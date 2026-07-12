@@ -312,13 +312,15 @@ func (m *Manager) BringUpStack(ctx context.Context, stackID string) error {
 	return nil
 }
 
-// BroadcastStacks pushes the current stack list to all WS clients.
+// BroadcastStacks pushes the current stack list to all WS clients, and notifies
+// on any managed container that changed status since the last sweep.
 func (m *Manager) BroadcastStacks(ctx context.Context) {
-	if m.pub == nil {
-		return
-	}
 	stacks, err := m.ListStacks(ctx)
 	if err != nil {
+		return
+	}
+	m.noteStatuses(stacks)
+	if m.pub == nil {
 		return
 	}
 	m.pub.Broadcast(api.WSMessage{Type: api.WSTypeStacks, Stacks: stacks})

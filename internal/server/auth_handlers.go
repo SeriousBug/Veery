@@ -44,6 +44,7 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	s.notifyAuth("Passkey enrolled", userID, "An invite link was redeemed and a passkey was enrolled.")
 	s.issueSession(w, userID)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -78,6 +79,7 @@ func (s *Server) handleAddDeviceFinish(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	s.notifyAuth("Passkey added", u.ID, "An additional passkey was enrolled on this account.")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -102,8 +104,19 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, err.Error())
 		return
 	}
+	s.notifyAuth("Signed in", userID, "A passkey was used to sign in.")
 	s.issueSession(w, userID)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// notifyAuth sends an account event, naming the user it happened to. The name
+// is looked up rather than passed in because most call sites only have the id.
+func (s *Server) notifyAuth(title, userID, detail string) {
+	who := userID
+	if u, err := s.store.GetUser(userID); err == nil {
+		who = u.Name
+	}
+	s.notify(api.EventAuth, title+": "+who, detail)
 }
 
 func (s *Server) issueSession(w http.ResponseWriter, userID string) {

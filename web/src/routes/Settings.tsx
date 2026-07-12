@@ -17,11 +17,14 @@ import { css } from "styled-system/css";
 import { hstack, vstack } from "styled-system/patterns";
 import { http, HttpError } from "../api/http";
 import { toaster } from "../lib/toaster";
+import { ToggleField } from "../components/ToggleField";
+import { NotificationsSection } from "../components/NotificationsSection";
 import { useAuth } from "../auth/AuthProvider";
 import { formatAge } from "../lib/format";
 import type { Settings as SettingsModel, DiskItem } from "../api/generated";
 
 export function Settings() {
+  const { user } = useAuth();
   const [form, setForm] = useState<SettingsModel | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -146,6 +149,8 @@ export function Settings() {
       )}
 
       <DiskVisibilitySection />
+
+      {user?.isAdmin && <NotificationsSection />}
 
       <PasskeysSection />
     </div>
@@ -510,58 +515,5 @@ function NumberField({
         <span className={css({ color: "textMuted", fontWeight: "bold" })}>{suffix}</span>
       </span>
     </div>
-  );
-}
-
-function ToggleField({
-  title,
-  hint,
-  checked,
-  onChange,
-}: {
-  title: string;
-  hint: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <Switch.Root
-      checked={checked}
-      onCheckedChange={(d) => onChange(d.checked)}
-      className={hstack({ justify: "space-between", gap: "4", cursor: "pointer" })}
-    >
-      <span className={vstack({ gap: "0.5", alignItems: "flex-start" })}>
-        <Switch.Label className={css({ fontWeight: "extrabold", fontSize: "md", color: "text" })}>
-          {title}
-        </Switch.Label>
-        <span className={css({ fontSize: "sm", color: "textMuted" })}>{hint}</span>
-      </span>
-      <Switch.Control
-        className={css({
-          w: "12",
-          h: "7",
-          borderRadius: "full",
-          bg: "ink.200",
-          p: "1",
-          transition: "background 0.2s ease",
-          flexShrink: 0,
-          "&[data-state='checked']": { bg: "grape.500" },
-        })}
-      >
-        <Switch.Thumb
-          className={css({
-            display: "block",
-            w: "5",
-            h: "5",
-            borderRadius: "full",
-            bg: "white",
-            boxShadow: "card",
-            transition: "transform 0.2s ease",
-            "&[data-state='checked']": { transform: "translateX(20px)" },
-          })}
-        />
-      </Switch.Control>
-      <Switch.HiddenInput />
-    </Switch.Root>
   );
 }
