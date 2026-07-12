@@ -1,50 +1,50 @@
 # Veery
 
-A tiny, self-hosted web app to manage your Docker containers — with **passkey-only login** (no
-passwords), one-tap service control, updates (manual and automatic), and live host + container
-resource metrics. Built for the person who knows "Home Assistant is down, I'll restart it," not
-Docker internals.
+A self-hosted web app to manage your Docker containers, with passkey-only login (no passwords),
+service start/stop/restart, updates (manual and automatic), and live host and container resource
+metrics. It is meant for people who want to restart Home Assistant without learning Docker.
 
 Veery ships as a single static Go binary with the web UI embedded, on a `distroless/static` base,
 so the image stays small.
 
 ## What it does
 
-- **Passkey-only auth.** No passwords to phish or brute-force. First run prints a one-time admin
-  enrollment link to the logs; admins mint further single-use invite links.
-- **Adopt then manage.** Veery snapshots each container's full create-spec from `docker inspect`
-  and stores it. From then on it can stop / start / restart / update a service, and **recreate it
-  from the snapshot** if the container is removed or the host reboots.
-- **Updates.** Manual (pull → compare image digest → recreate if changed) and an auto-update poller.
-- **Live metrics.** Host CPU, memory, disk usage and disk read/write bandwidth, plus per-container
-  CPU and memory, pushed live over a WebSocket into colorful gauges.
-- **Proactive.** Anything unhealthy, stopped, or restart-looping surfaces in a "Needs attention"
-  band with a one-tap fix.
+- Passkey-only auth. There are no passwords to phish or brute-force. The first run prints a
+  one-time admin enrollment link to the logs; admins can then mint further single-use invite links.
+- Adopt, then manage. Veery snapshots each container's full create-spec from `docker inspect` and
+  stores it. From then on it can stop, start, restart, or update a service, and recreate it from the
+  snapshot if the container is removed or the host reboots.
+- Updates. Manual (pull the image, compare its digest, recreate the container if it changed) and an
+  auto-update poller.
+- Live metrics. Host CPU, memory, disk usage and disk read/write bandwidth, plus per-container CPU
+  and memory, pushed over a WebSocket into gauges.
+- Anything unhealthy, stopped, or restart-looping shows up in a "Needs attention" band with a
+  button to fix it.
 
 ### Scope
 
-Veery **adopts and manages** existing stacks. It does not include a compose engine, so it cannot
-create a stack that has never run. Bring your stack up your usual way once (or point Veery at one
-that is already running); Veery snapshots it, and from then on can control, update, and rebuild it
-from the snapshot. The "Bring back up" button recreates a stack from its stored snapshot.
+Veery adopts and manages existing stacks. It has no compose engine, so it cannot create a stack that
+has never run. Bring your stack up your usual way once, or point Veery at one that is already
+running. Veery snapshots it, and from then on can control, update, and rebuild it from that
+snapshot. The "Bring back up" button recreates a stack from its stored snapshot.
 
 ## Requirements
 
 - Docker Engine with the API socket available at `/var/run/docker.sock`.
-- **A TLS reverse proxy.** WebAuthn (passkeys) requires a secure context, and Veery's session
-  cookie is `Secure`. Run Veery behind a proxy that terminates HTTPS (Caddy, Traefik, nginx, …).
+- A TLS reverse proxy. WebAuthn (passkeys) requires a secure context, and Veery's session cookie is
+  `Secure`. Run Veery behind a proxy that terminates HTTPS, such as Caddy, Traefik, or nginx.
   `localhost` is also a secure context, which is enough for local development.
 
 ## Configuration
 
-| Env var         | Default                  | Meaning                                             |
-| --------------- | ------------------------ | --------------------------------------------------- |
-| `VEERY_RP_ID`   | `localhost`              | WebAuthn Relying Party ID — your domain, e.g. `veery.example.com` (no scheme, no port). |
-| `VEERY_ORIGIN`  | `http://localhost:8080`  | Full origin the browser uses, e.g. `https://veery.example.com`. Used for invite URLs and cookie `Secure` flag. |
-| `VEERY_ADDR`    | `:8080`                  | Listen address.                                     |
-| `VEERY_DB`      | `/data/veery.db`         | SQLite database path (persist this volume).         |
-| `HOST_PROC`     | (unset)                  | Set to `/host/proc` when running in a container so host metrics are read from the mounted host `/proc`. |
-| `HOST_SYS`      | (unset)                  | Set to `/host/sys` likewise for host `/sys`.        |
+| Env var        | Default                 | Meaning                                                                                                       |
+| -------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `VEERY_RP_ID`  | `localhost`             | WebAuthn Relying Party ID: your domain, e.g. `veery.example.com` (no scheme, no port).                         |
+| `VEERY_ORIGIN` | `http://localhost:8080` | Full origin the browser uses, e.g. `https://veery.example.com`. Used for invite URLs and the cookie `Secure` flag. |
+| `VEERY_ADDR`   | `:8080`                 | Listen address.                                                                                                |
+| `VEERY_DB`     | `/data/veery.db`        | SQLite database path (persist this volume).                                                                    |
+| `HOST_PROC`    | (unset)                 | Set to `/host/proc` when running in a container, so host metrics are read from the mounted host `/proc`.        |
+| `HOST_SYS`     | (unset)                 | Set to `/host/sys` likewise for host `/sys`.                                                                   |
 
 ## Running
 
@@ -66,17 +66,20 @@ Then read the first-run enrollment link from the logs and open it to register yo
 
 ```sh
 docker logs veery
-# veery no users yet — enroll the first admin passkey here:
+# veery no users yet - enroll the first admin passkey here:
 #     https://veery.example.com/enroll?token=...
 ```
 
 Put Veery behind your TLS proxy so the browser reaches `VEERY_ORIGIN` over HTTPS.
 
+Images are published to `ghcr.io/seriousbug/veery`. Use a version tag like `v0.1.0` to pin a
+release, `latest` for the newest release, or `dev` for the current state of `main`.
+
 ### Recovering access (lost all passkeys)
 
-Passkeys have no password fallback, so if every enrolled device is lost you would
-otherwise be locked out. Because host access already equals full control (the Docker
-socket), you can mint a fresh enrollment link from the host and enroll a new passkey:
+Passkeys have no password fallback, so if every enrolled device is lost you would otherwise be
+locked out. Host access already means full control through the Docker socket, so you can mint a
+fresh enrollment link from the host and enroll a new passkey:
 
 ```sh
 docker exec veery /veery invite            # admin link (default)
@@ -87,32 +90,32 @@ The link is single-use and valid for 24 hours. Open it to register a new passkey
 
 ## Security notes
 
-- **Docker socket access is root-equivalent on the host.** Anyone who can authenticate to Veery can
-  control your containers. Passkey-only auth is the gate — there is no password fallback.
+- Docker socket access is root-equivalent on the host. Anyone who can authenticate to Veery can
+  control your containers. Passkey-only auth is the gate, and there is no password fallback.
 - Veery must run behind TLS: WebAuthn needs a secure context and the session cookie is `Secure`.
-- Invites are single-use and expiring; sessions use random, expiring tokens in an `HttpOnly` cookie
+- Invites are single-use and expiring. Sessions use random, expiring tokens in an `HttpOnly` cookie
   that JavaScript never sees. The same cookie authenticates the WebSocket upgrade.
-- Mount `/proc` and `/sys` read-only. The Docker socket must allow API calls (it cannot be read-only
-  for write operations like start/stop), so treat access to Veery as access to the host.
+- Mount `/proc` and `/sys` read-only. The Docker socket must allow API calls, since it cannot be
+  read-only for operations like start and stop, so treat access to Veery as access to the host.
 
 ## Limitations and roadmap
 
-- **Private registries.** Image updates pull anonymously, so private images (private
-  GHCR/Docker Hub repos, self-hosted registries needing auth) can't be updated yet.
-  Per-registry credentials in settings are planned.
-- **No log viewer yet.** To diagnose *why* a service is down you still need
-  `docker logs <name>` on the host. An in-app log tail is planned.
-- **Snapshot drift.** Veery snapshots a container's spec when you first manage it. If you
-  later change that stack your usual way (new port, env, volume) and bring it up outside
-  Veery, Veery's snapshot is stale — re-run "Let Veery manage this" on it to refresh the
-  snapshot before using "Bring back up".
-- **Startup ordering.** Bringing a whole stack back up does not yet honor `depends_on`
-  ordering; services that depend on each other may need a moment (and a retry) to settle.
+- Private registries. Image updates pull anonymously, so private images (private GHCR or Docker Hub
+  repos, self-hosted registries that need auth) can't be updated yet. Per-registry credentials in
+  settings are planned.
+- No log viewer yet. To find out why a service is down you still need `docker logs <name>` on the
+  host. An in-app log tail is planned.
+- Snapshot drift. Veery snapshots a container's spec when you first manage it. If you later change
+  that stack your usual way (new port, env, volume) and bring it up outside Veery, Veery's snapshot
+  is stale. Re-run "Let Veery manage this" on it to refresh the snapshot before using "Bring back
+  up".
+- Startup ordering. Bringing a whole stack back up does not yet honor `depends_on` ordering, so
+  services that depend on each other may need a moment and a retry to settle.
 
 ## Development
 
-Tooling versions are pinned in `.tool-versions` (Go, Node, pnpm). The frontend uses pnpm; a 7-day
-minimum-release-age is enforced (pnpm `minimumReleaseAge`; Go via pinned module versions).
+Tooling versions are pinned in `.tool-versions` (Go, Node, pnpm). The frontend uses pnpm, with a
+7-day minimum release age enforced (pnpm `minimumReleaseAge`; Go through pinned module versions).
 
 ```sh
 # Backend (serves the last-built embedded SPA, or run the Vite dev server alongside)
@@ -125,9 +128,14 @@ cd web && pnpm install && pnpm dev
 # Run from the repo root: tygo reads tygo.yaml from the working directory.
 go run github.com/gzuidhof/tygo@v0.2.17 generate
 
-# Build the tiny production image
+# Build the production image
 docker build -t veery .
 ```
 
 Shared types live in `internal/api/types.go` and are generated into `web/src/api/generated.ts` with
 [tygo](https://github.com/gzuidhof/tygo), so the backend and frontend stay typed off one source.
+
+## License
+
+Veery is licensed under the GNU Affero General Public License v3.0 only (AGPL-3.0-only). See
+[LICENSE](LICENSE).
