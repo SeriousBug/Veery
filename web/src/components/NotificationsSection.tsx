@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Bell, Loader2, Save, Send, Lock } from "lucide-react";
+import { Bell, Loader2, Plus, Save, Send, Lock } from "lucide-react";
 import { css } from "styled-system/css";
 import { hstack, vstack } from "styled-system/patterns";
 import { http, HttpError } from "../api/http";
 import { toaster } from "../lib/toaster";
 import { ToggleField } from "./ToggleField";
+import { NotificationTarget } from "./NotificationTarget";
+import { buildURL, isComplete, newTarget, parseURL, type Target } from "../lib/shoutrrr";
 import type { NotificationConfig, NotificationEvent } from "../api/generated";
 
 const EVENTS: { event: NotificationEvent; title: string; hint: string }[] = [
@@ -30,13 +32,9 @@ const EVENTS: { event: NotificationEvent; title: string; hint: string }[] = [
   },
 ];
 
-const PLACEHOLDER = `discord://token@channel-id
-ntfy://ntfy.sh/my-topic
-slack://hook:token-a/token-b/token-c`;
-
 export function NotificationsSection() {
   const [cfg, setCfg] = useState<NotificationConfig | null>(null);
-  const [urlText, setUrlText] = useState("");
+  const [targets, setTargets] = useState<Target[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -48,7 +46,7 @@ export function NotificationsSection() {
       .then((data) => {
         if (cancelled) return;
         setCfg(data);
-        setUrlText(data.urls.join("\n"));
+        setTargets(data.urls.map(parseURL));
       })
       .catch((err) => {
         if (!cancelled)
@@ -59,15 +57,18 @@ export function NotificationsSection() {
     };
   }, []);
 
-  const urls = urlText
-    .split("\n")
-    .map((u) => u.trim())
-    .filter(Boolean);
+  const complete = targets.filter(isComplete);
+  const urls = complete.map(buildURL);
+  const incomplete = targets.length - complete.length;
   const locked = cfg?.envManaged ?? false;
 
   function setEvent(event: NotificationEvent, on: boolean) {
     if (!cfg) return;
     setCfg({ ...cfg, events: { ...cfg.events, [event]: on } });
+  }
+
+  function updateTarget(t: Target) {
+    setTargets((ts) => ts.map((old) => (old.id === t.id ? t : old)));
   }
 
   async function save() {
@@ -79,7 +80,7 @@ export function NotificationsSection() {
         events: cfg.events,
       });
       setCfg(saved);
-      setUrlText(saved.urls.join("\n"));
+      setTargets(saved.urls.map(parseURL));
       toaster.create({ type: "success", title: "Notifications saved", duration: 3000 });
     } catch (err) {
       toaster.create({
@@ -166,43 +167,53 @@ export function NotificationsSection() {
             </span>
           )}
 
-          <div className={vstack({ gap: "2", alignItems: "stretch" })}>
+          <div className={vstack({ gap: "3", alignItems: "stretch" })}>
             <span className={css({ fontWeight: "extrabold", fontSize: "md" })}>Where to send them</span>
             <span className={css({ fontSize: "sm", color: "textMuted" })}>
-              One address per line. Discord, ntfy, Slack, Telegram, Gotify, Pushover, Matrix, email
-              and plain webhooks all work — see{" "}
-              <a
-                href="https://containrrr.dev/shoutrrr/v0.8/services/overview/"
-                target="_blank"
-                rel="noreferrer"
-                className={css({ color: "accent", fontWeight: "bold", textDecoration: "underline" })}
-              >
-                the list of address formats
-              </a>
-              .
+              Pick a service and fill in what it needs. Fields marked{" "}
+              <span className={css({ color: "coral.600", fontWeight: "bold" })}>*</span> are required.
             </span>
-            <textarea
-              value={urlText}
-              disabled={locked}
-              spellCheck={false}
-              rows={Math.max(3, urls.length + 1)}
-              placeholder={PLACEHOLDER}
-              onChange={(e) => setUrlText(e.target.value)}
-              className={css({
-                px: "3.5",
-                py: "2.5",
-                borderRadius: "md",
-                borderWidth: "1px",
-                borderColor: "border",
-                bg: "bg",
-                color: "text",
-                fontFamily: "mono",
-                fontSize: "sm",
-                resize: "vertical",
-                _focusVisible: { outline: "none", borderColor: "accent", boxShadow: "card" },
-                _disabled: { opacity: 0.7, cursor: "not-allowed" },
-              })}
-            />
+
+            {targets.length === 0 && (
+              <span className={css({ fontSize: "sm", color: "textMuted" })}>
+                No places to send to yet.
+              </span>
+            )}
+
+            {targets.map((t) => (
+              <NotificationTarget
+                key={t.id}
+                target={t}
+                disabled={locked}
+                onChange={updateTarget}
+                onRemove={() => setTargets((ts) => ts.filter((old) => old.id !== t.id))}
+              />
+            ))}
+
+            {!locked && (
+              <button
+                onClick={() => setTargets((ts) => [...ts, newTarget("discord")])}
+                className={hstack({
+                  gap: "2",
+                  alignSelf: "flex-start",
+                  px: "4",
+                  py: "2.5",
+                  borderRadius: "full",
+                  bg: "bg",
+                  color: "text",
+                  borderWidth: "1px",
+                  borderStyle: "dashed",
+                  borderColor: "border",
+                  fontWeight: "extrabold",
+                  fontSize: "sm",
+                  cursor: "pointer",
+                  _hover: { borderColor: "accent", color: "accent" },
+                })}
+              >
+                <Plus size={16} />
+                Add a place
+              </button>
+            )}
           </div>
 
           <div className={vstack({ gap: "4", alignItems: "stretch" })}>
@@ -219,11 +230,11 @@ export function NotificationsSection() {
             ))}
           </div>
 
-          <div className={hstack({ gap: "3", flexWrap: "wrap" })}>
+          <div className={hstack({ gap: "3", flexWrap: "wrap", alignItems: "center" })}>
             {!locked && (
               <button
                 onClick={save}
-                disabled={saving}
+                disabled={saving || incomplete > 0}
                 className={hstack({
                   gap: "2",
                   px: "6",
@@ -271,6 +282,13 @@ export function NotificationsSection() {
               )}
               Send a test
             </button>
+            {incomplete > 0 && (
+              <span className={css({ fontSize: "sm", color: "coral.600", fontWeight: "bold" })}>
+                {incomplete === 1
+                  ? "One place is missing a required field."
+                  : `${incomplete} places are missing required fields.`}
+              </span>
+            )}
           </div>
         </>
       )}
