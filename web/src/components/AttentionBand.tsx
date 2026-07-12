@@ -66,7 +66,11 @@ export function AttentionBand({
       <div className={vstack({ gap: "2.5", alignItems: "stretch" })}>
         {problems.map((stack) => {
           const busy = stackBusy(stack, jobs);
-          const missing = stack.status === "missing";
+          // A stack with any missing container aggregates to needs_attention,
+          // but Restart can't recreate a removed container — Bring back up can.
+          const missing =
+            stack.status === "missing" ||
+            stack.containers.some((c) => c.status === "missing");
           return (
             <div
               key={stack.id}

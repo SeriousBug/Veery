@@ -5,6 +5,7 @@ package metrics
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"time"
 
@@ -128,30 +129,72 @@ var pseudoFS = map[string]bool{
 	"binfmt_misc": true, "hugetlbfs": true, "efivarfs": true,
 }
 
+// noiseMountPrefixes are mount points that are real filesystems but not useful
+// to surface as "storage" on the dashboard (OS-internal volumes, snapshots,
+// per-user temp dirs). Time Machine local snapshots in particular mount dozens
+// of these on macOS.
+var noiseMountPrefixes = []string{
+	"/System/Volumes",
+	"/Volumes/.timemachine",
+	"/private/var/folders",
+	"/dev",
+	"/proc", "/sys", "/run",
+}
+
+func skipMount(mountpoint string) bool {
+	if strings.HasSuffix(mountpoint, ".backup") ||
+		strings.Contains(mountpoint, "com.apple.TimeMachine") ||
+		strings.Contains(mountpoint, ".localsnapshots") {
+		return true
+	}
+	for _, p := range noiseMountPrefixes {
+		if mountpoint == p || strings.HasPrefix(mountpoint, p+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// maxDisks bounds how many filesystems the dashboard shows, largest first.
+const maxDisks = 12
+
 func diskUsage() []api.DiskUsage {
 	parts, err := disk.PartitionsWithContext(context.Background(), false)
 	if err != nil {
 		return nil
 	}
-	seen := map[string]bool{}
+	seenMount := map[string]bool{}
+	seenDevice := map[string]bool{}
 	var out []api.DiskUsage
 	for _, p := range parts {
 		if pseudoFS[p.Fstype] || strings.HasPrefix(p.Fstype, "fuse.") {
 			continue
 		}
-		if seen[p.Mountpoint] {
+		if skipMount(p.Mountpoint) || seenMount[p.Mountpoint] {
 			continue
 		}
-		seen[p.Mountpoint] = true
+		// Collapse multiple mounts backed by the same device (e.g. bind mounts,
+		// docker volumes sharing the host root device).
+		if p.Device != "" && seenDevice[p.Device] {
+			continue
+		}
 		u, err := disk.Usage(p.Mountpoint)
 		if err != nil || u.Total == 0 {
 			continue
+		}
+		seenMount[p.Mountpoint] = true
+		if p.Device != "" {
+			seenDevice[p.Device] = true
 		}
 		out = append(out, api.DiskUsage{
 			Mount: p.Mountpoint,
 			Used:  u.Used,
 			Total: u.Total,
 		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Total > out[j].Total })
+	if len(out) > maxDisks {
+		out = out[:maxDisks]
 	}
 	return out
 }
