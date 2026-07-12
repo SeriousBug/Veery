@@ -142,9 +142,10 @@ func pollStacks(ctx context.Context, dkr *docker.Manager, st *store.Store) {
 // broadcasts it over the WS.
 func pollMetrics(ctx context.Context, dkr *docker.Manager, hub *server.Hub, st *store.Store) {
 	col := metrics.New()
-	readPeak, writePeak, err := st.LoadDiskIOPeaks()
+	peaks, err := st.LoadDiskPeaks()
 	if err != nil {
-		log.Printf("metrics: load disk I/O peaks: %v", err)
+		log.Printf("metrics: load disk peaks: %v", err)
+		peaks = map[string]metrics.DevicePeak{}
 	}
 	for {
 		t := time.NewTimer(pollInterval(st))
@@ -154,23 +155,17 @@ func pollMetrics(ctx context.Context, dkr *docker.Manager, hub *server.Hub, st *
 			return
 		case <-t.C:
 		}
-		host, err := col.Snapshot()
+		sample := col.Sample()
+		if metrics.UpdatePeaks(peaks, sample.Devices) {
+			if err := st.SaveDiskPeaks(peaks); err != nil {
+				log.Printf("metrics: save disk peaks: %v", err)
+			}
+		}
+		vis, err := st.LoadDiskVisibility()
 		if err != nil {
-			log.Printf("metrics: host snapshot: %v", err)
+			log.Printf("metrics: load disk visibility: %v", err)
 		}
-		if host.DiskReadBytesPerSec > readPeak || host.DiskWriteBytesPerSec > writePeak {
-			if host.DiskReadBytesPerSec > readPeak {
-				readPeak = host.DiskReadBytesPerSec
-			}
-			if host.DiskWriteBytesPerSec > writePeak {
-				writePeak = host.DiskWriteBytesPerSec
-			}
-			if err := st.SaveDiskIOPeaks(readPeak, writePeak); err != nil {
-				log.Printf("metrics: save disk I/O peaks: %v", err)
-			}
-		}
-		host.DiskReadPeakBytesPerSec = readPeak
-		host.DiskWritePeakBytesPerSec = writePeak
+		host := metrics.BuildHostMetrics(sample, vis, peaks)
 		containers, err := dkr.ContainerStats(ctx)
 		if err != nil {
 			log.Printf("metrics: container stats: %v", err)

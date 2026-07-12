@@ -77,29 +77,57 @@ export interface Stack {
   containers: Container[];
 }
 /**
- * DiskUsage is per-filesystem usage.
+ * DiskUsage is per-filesystem capacity usage. Key is the stable visibility key
+ * (see DiskItem) so the UI can tie a gauge back to its config toggle.
  */
 export interface DiskUsage {
+  key: string;
   mount: string;
   used: number /* uint64 */;
   total: number /* uint64 */;
 }
 /**
- * HostMetrics is a snapshot of host-level resource use.
+ * DiskActivity is one physical device's read/write throughput. Peaks are the
+ * highest rates ever recorded for that device, persisted across restarts; the
+ * UI colours the current rate against these highwater marks.
+ */
+export interface DiskActivity {
+  key: string;
+  device: string;
+  readBytesPerSec: number /* uint64 */;
+  writeBytesPerSec: number /* uint64 */;
+  readPeakBytesPerSec: number /* uint64 */;
+  writePeakBytesPerSec: number /* uint64 */;
+}
+/**
+ * DiskKind distinguishes the two disconnected views a disk can appear in:
+ * capacity is per mount, activity is per physical device.
+ */
+export type DiskKind = string;
+export const DiskCapacity: DiskKind = "capacity";
+export const DiskActivityKind: DiskKind = "activity";
+/**
+ * DiskItem is one configurable entry in the "which disks to show" settings. It
+ * covers both a capacity mount and an activity device; Kind says which.
+ */
+export interface DiskItem {
+  key: string;
+  kind: DiskKind;
+  label: string;
+  detail: string;
+  shown: boolean;
+  defaultShown: boolean;
+}
+/**
+ * HostMetrics is a snapshot of host-level resource use. Disks and DiskActivity
+ * carry only the entries the current visibility settings leave shown.
  */
 export interface HostMetrics {
   cpuPercent: number /* float64 */;
   memUsed: number /* uint64 */;
   memTotal: number /* uint64 */;
   disks: DiskUsage[];
-  diskReadBytesPerSec: number /* uint64 */;
-  diskWriteBytesPerSec: number /* uint64 */;
-  /**
-   * Peaks are the highest read/write throughput ever recorded, persisted across
-   * restarts. The UI colours the current rate against these highwater marks.
-   */
-  diskReadPeakBytesPerSec: number /* uint64 */;
-  diskWritePeakBytesPerSec: number /* uint64 */;
+  diskActivity: DiskActivity[];
 }
 /**
  * ContainerMetrics is a snapshot of one container's resource use.
@@ -186,6 +214,17 @@ export interface Settings {
   pollIntervalSeconds: number /* int */;
   autoUpdateDefault: boolean;
   autoUpdateIntervalMinutes: number /* int */;
+  /**
+   * DiskVisibility overrides the default shown/hidden state per disk key. Keys
+   * absent here fall back to the built-in heuristic. Applies to all users.
+   */
+  diskVisibility: { [key: string]: boolean};
+}
+/**
+ * SetDiskVisibilityRequest updates which disks are shown, for all users.
+ */
+export interface SetDiskVisibilityRequest {
+  visibility: { [key: string]: boolean};
 }
 /**
  * APIError is the shape of error responses.

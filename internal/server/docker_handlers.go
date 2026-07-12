@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/SeriousBug/Veery/internal/api"
+	"github.com/SeriousBug/Veery/internal/metrics"
 )
 
 // dockerReady guards handlers that need the Docker manager, returning 503 when
@@ -130,4 +131,34 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, cfg)
+}
+
+func (s *Server) handleListDisks(w http.ResponseWriter, r *http.Request) {
+	overrides, err := s.store.LoadDiskVisibility()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	mounts, devices := metrics.Enumerate()
+	items := metrics.BuildDiskItems(mounts, devices, overrides)
+	if items == nil {
+		items = []api.DiskItem{}
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (s *Server) handleSetDiskVisibility(w http.ResponseWriter, r *http.Request) {
+	var req api.SetDiskVisibilityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad request")
+		return
+	}
+	if req.Visibility == nil {
+		req.Visibility = map[string]bool{}
+	}
+	if err := s.store.SaveDiskVisibility(req.Visibility); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.handleListDisks(w, r)
 }

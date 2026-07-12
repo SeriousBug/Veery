@@ -5,6 +5,7 @@ import { Gauge } from "./Gauge";
 import { useLiveData } from "../live/LiveData";
 import { formatPercent, formatRate, formatUsage, ratioPct, rateLevel } from "../lib/format";
 import type { RateLevel } from "../lib/format";
+import type { DiskActivity } from "../api/generated";
 
 const rateColorClass: Record<RateLevel, string> = {
   idle: css({ color: "textMuted" }),
@@ -16,6 +17,7 @@ const rateColorClass: Record<RateLevel, string> = {
 export function HostResources() {
   const { metrics } = useLiveData();
   const host = metrics?.host;
+  const hasStorage = !!host && (host.disks.length > 0 || host.diskActivity.length > 0);
 
   return (
     <section
@@ -38,43 +40,54 @@ export function HostResources() {
       {!host ? (
         <p className={css({ color: "textMuted" })}>Reading live resource usage…</p>
       ) : (
-        <div className={grid({ columns: { base: 1, md: 2 }, gap: "5" })}>
-          <Gauge
-            label="Processor"
-            value={formatPercent(host.cpuPercent)}
-            pct={host.cpuPercent}
-            icon={<Cpu size={15} />}
-          />
-          <Gauge
-            label="Memory"
-            value={formatUsage(host.memUsed, host.memTotal)}
-            pct={ratioPct(host.memUsed, host.memTotal)}
-            icon={<MemoryStick size={15} />}
-          />
-          {host.disks.map((d) => (
+        <div className={vstack({ gap: "5", alignItems: "stretch" })}>
+          <div className={grid({ columns: { base: 1, md: 2 }, gap: "5" })}>
             <Gauge
-              key={d.mount}
-              label={<DiskLabel mount={d.mount} />}
-              value={formatUsage(d.used, d.total)}
-              pct={ratioPct(d.used, d.total)}
-              icon={<HardDrive size={15} />}
+              label="Processor"
+              value={formatPercent(host.cpuPercent)}
+              pct={host.cpuPercent}
+              icon={<Cpu size={15} />}
             />
-          ))}
-          <div className={hstack({ gap: "6", alignSelf: "center", flexWrap: "wrap" })}>
-            <Bandwidth
-              icon={<Download size={16} className={css({ color: "teal.500" })} />}
-              label="Reading"
-              value={formatRate(host.diskReadBytesPerSec)}
-              level={rateLevel(host.diskReadBytesPerSec, host.diskReadPeakBytesPerSec)}
+            <Gauge
+              label="Memory"
+              value={formatUsage(host.memUsed, host.memTotal)}
+              pct={ratioPct(host.memUsed, host.memTotal)}
+              icon={<MemoryStick size={15} />}
             />
-            <Bandwidth
-              icon={<Upload size={16} className={css({ color: "grape.500" })} />}
-              label="Writing"
-              value={formatRate(host.diskWriteBytesPerSec)}
-              level={rateLevel(host.diskWriteBytesPerSec, host.diskWritePeakBytesPerSec)}
-            />
+            {host.disks.map((d) => (
+              <Gauge
+                key={d.key}
+                label={<DiskLabel mount={d.mount} />}
+                value={formatUsage(d.used, d.total)}
+                pct={ratioPct(d.used, d.total)}
+                icon={<HardDrive size={15} />}
+              />
+            ))}
           </div>
+
+          {host.diskActivity.length > 0 && (
+            <div
+              className={css({
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "6",
+                pt: "4",
+                borderTopWidth: "1px",
+                borderColor: "border",
+              })}
+            >
+              {host.diskActivity.map((a) => (
+                <DiskActivityRow key={a.key} activity={a} single={host.diskActivity.length === 1} />
+              ))}
+            </div>
+          )}
         </div>
+      )}
+
+      {host && !hasStorage && (
+        <p className={css({ fontSize: "sm", color: "textMuted" })}>
+          No disks to show. Pick some in Settings.
+        </p>
       )}
     </section>
   );
@@ -97,6 +110,33 @@ function DiskLabel({ mount }: { mount: string }) {
         </span>
       )}
     </span>
+  );
+}
+
+function DiskActivityRow({ activity, single }: { activity: DiskActivity; single: boolean }) {
+  return (
+    <div className={vstack({ gap: "2", alignItems: "flex-start", minW: "0" })}>
+      {!single && (
+        <span className={hstack({ gap: "1.5", fontSize: "sm", fontWeight: "extrabold", color: "text" })}>
+          <HardDrive size={15} className={css({ color: "textMuted" })} />
+          {activity.device}
+        </span>
+      )}
+      <div className={hstack({ gap: "6", flexWrap: "wrap" })}>
+        <Bandwidth
+          icon={<Download size={16} className={css({ color: "teal.500" })} />}
+          label="Reading"
+          value={formatRate(activity.readBytesPerSec)}
+          level={rateLevel(activity.readBytesPerSec, activity.readPeakBytesPerSec)}
+        />
+        <Bandwidth
+          icon={<Upload size={16} className={css({ color: "grape.500" })} />}
+          label="Writing"
+          value={formatRate(activity.writeBytesPerSec)}
+          level={rateLevel(activity.writeBytesPerSec, activity.writePeakBytesPerSec)}
+        />
+      </div>
+    </div>
   );
 }
 

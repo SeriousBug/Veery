@@ -68,25 +68,55 @@ type Stack struct {
 	Containers []Container     `json:"containers"`
 }
 
-// DiskUsage is per-filesystem usage.
+// DiskUsage is per-filesystem capacity usage. Key is the stable visibility key
+// (see DiskItem) so the UI can tie a gauge back to its config toggle.
 type DiskUsage struct {
+	Key   string `json:"key"`
 	Mount string `json:"mount"`
 	Used  uint64 `json:"used"`
 	Total uint64 `json:"total"`
 }
 
-// HostMetrics is a snapshot of host-level resource use.
+// DiskActivity is one physical device's read/write throughput. Peaks are the
+// highest rates ever recorded for that device, persisted across restarts; the
+// UI colours the current rate against these highwater marks.
+type DiskActivity struct {
+	Key                  string `json:"key"`
+	Device               string `json:"device"`
+	ReadBytesPerSec      uint64 `json:"readBytesPerSec"`
+	WriteBytesPerSec     uint64 `json:"writeBytesPerSec"`
+	ReadPeakBytesPerSec  uint64 `json:"readPeakBytesPerSec"`
+	WritePeakBytesPerSec uint64 `json:"writePeakBytesPerSec"`
+}
+
+// DiskKind distinguishes the two disconnected views a disk can appear in:
+// capacity is per mount, activity is per physical device.
+type DiskKind string
+
+const (
+	DiskCapacity DiskKind = "capacity"
+	DiskActivityKind DiskKind = "activity"
+)
+
+// DiskItem is one configurable entry in the "which disks to show" settings. It
+// covers both a capacity mount and an activity device; Kind says which.
+type DiskItem struct {
+	Key          string   `json:"key"`
+	Kind         DiskKind `json:"kind"`
+	Label        string   `json:"label"`
+	Detail       string   `json:"detail"`
+	Shown        bool     `json:"shown"`
+	DefaultShown bool     `json:"defaultShown"`
+}
+
+// HostMetrics is a snapshot of host-level resource use. Disks and DiskActivity
+// carry only the entries the current visibility settings leave shown.
 type HostMetrics struct {
-	CPUPercent           float64     `json:"cpuPercent"`
-	MemUsed              uint64      `json:"memUsed"`
-	MemTotal             uint64      `json:"memTotal"`
-	Disks                []DiskUsage `json:"disks"`
-	DiskReadBytesPerSec  uint64      `json:"diskReadBytesPerSec"`
-	DiskWriteBytesPerSec uint64      `json:"diskWriteBytesPerSec"`
-	// Peaks are the highest read/write throughput ever recorded, persisted across
-	// restarts. The UI colours the current rate against these highwater marks.
-	DiskReadPeakBytesPerSec  uint64 `json:"diskReadPeakBytesPerSec"`
-	DiskWritePeakBytesPerSec uint64 `json:"diskWritePeakBytesPerSec"`
+	CPUPercent   float64        `json:"cpuPercent"`
+	MemUsed      uint64         `json:"memUsed"`
+	MemTotal     uint64         `json:"memTotal"`
+	Disks        []DiskUsage    `json:"disks"`
+	DiskActivity []DiskActivity `json:"diskActivity"`
 }
 
 // ContainerMetrics is a snapshot of one container's resource use.
@@ -167,6 +197,14 @@ type Settings struct {
 	PollIntervalSeconds int  `json:"pollIntervalSeconds"`
 	AutoUpdateDefault   bool `json:"autoUpdateDefault"`
 	AutoUpdateIntervalMinutes int `json:"autoUpdateIntervalMinutes"`
+	// DiskVisibility overrides the default shown/hidden state per disk key. Keys
+	// absent here fall back to the built-in heuristic. Applies to all users.
+	DiskVisibility map[string]bool `json:"diskVisibility"`
+}
+
+// SetDiskVisibilityRequest updates which disks are shown, for all users.
+type SetDiskVisibilityRequest struct {
+	Visibility map[string]bool `json:"visibility"`
 }
 
 // APIError is the shape of error responses.

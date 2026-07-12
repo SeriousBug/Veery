@@ -1,10 +1,12 @@
 package store
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 
 	"github.com/SeriousBug/Veery/internal/api"
+	"github.com/SeriousBug/Veery/internal/metrics"
 )
 
 // Default settings applied when a key is unset.
@@ -18,8 +20,8 @@ const (
 	keyPollInterval       = "poll_interval_seconds"
 	keyAutoUpdateDefault  = "auto_update_default"
 	keyAutoUpdateInterval = "auto_update_interval_minutes"
-	keyDiskReadPeak       = "disk_read_peak_bytes_per_sec"
-	keyDiskWritePeak      = "disk_write_peak_bytes_per_sec"
+	keyDiskVisibility     = "disk_visibility"
+	keyDiskPeaks          = "disk_io_peaks"
 )
 
 // LoadSettings reads app settings, applying defaults for unset keys.
@@ -28,6 +30,7 @@ func (s *Store) LoadSettings() (api.Settings, error) {
 		PollIntervalSeconds:       DefaultPollIntervalSeconds,
 		AutoUpdateDefault:         DefaultAutoUpdateDefault,
 		AutoUpdateIntervalMinutes: DefaultAutoUpdateIntervalMinutes,
+		DiskVisibility:            map[string]bool{},
 	}
 	if v, err := s.getInt(keyPollInterval); err == nil {
 		out.PollIntervalSeconds = v
@@ -44,6 +47,11 @@ func (s *Store) LoadSettings() (api.Settings, error) {
 	} else if !errors.Is(err, ErrNotFound) {
 		return out, err
 	}
+	vis, err := s.LoadDiskVisibility()
+	if err != nil {
+		return out, err
+	}
+	out.DiskVisibility = vis
 	return out, nil
 }
 
@@ -59,44 +67,63 @@ func (s *Store) SaveSettings(cfg api.Settings) error {
 	if cfg.AutoUpdateDefault {
 		v = "1"
 	}
-	return s.SetSetting(keyAutoUpdateDefault, v)
-}
-
-// LoadDiskIOPeaks returns the persisted highwater marks for disk read/write
-// throughput, defaulting to 0 when unset.
-func (s *Store) LoadDiskIOPeaks() (read, write uint64, err error) {
-	read, err = s.getUint(keyDiskReadPeak)
-	if err != nil {
-		return 0, 0, err
-	}
-	write, err = s.getUint(keyDiskWritePeak)
-	if err != nil {
-		return 0, 0, err
-	}
-	return read, write, nil
-}
-
-// SaveDiskIOPeaks persists the highwater marks for disk read/write throughput.
-func (s *Store) SaveDiskIOPeaks(read, write uint64) error {
-	if err := s.SetSetting(keyDiskReadPeak, strconv.FormatUint(read, 10)); err != nil {
+	if err := s.SetSetting(keyAutoUpdateDefault, v); err != nil {
 		return err
 	}
-	return s.SetSetting(keyDiskWritePeak, strconv.FormatUint(write, 10))
+	if cfg.DiskVisibility != nil {
+		return s.SaveDiskVisibility(cfg.DiskVisibility)
+	}
+	return nil
 }
 
-func (s *Store) getUint(key string) (uint64, error) {
-	v, err := s.GetSetting(key)
+// LoadDiskVisibility returns the per-disk shown/hidden overrides.
+func (s *Store) LoadDiskVisibility() (map[string]bool, error) {
+	out := map[string]bool{}
+	v, err := s.GetSetting(keyDiskVisibility)
 	if errors.Is(err, ErrNotFound) {
-		return 0, nil
+		return out, nil
 	}
 	if err != nil {
-		return 0, err
+		return out, err
 	}
-	n, err := strconv.ParseUint(v, 10, 64)
+	if err := json.Unmarshal([]byte(v), &out); err != nil {
+		return map[string]bool{}, nil
+	}
+	return out, nil
+}
+
+// SaveDiskVisibility persists the per-disk shown/hidden overrides.
+func (s *Store) SaveDiskVisibility(vis map[string]bool) error {
+	b, err := json.Marshal(vis)
 	if err != nil {
-		return 0, nil
+		return err
 	}
-	return n, nil
+	return s.SetSetting(keyDiskVisibility, string(b))
+}
+
+// LoadDiskPeaks returns the persisted per-device throughput highwater marks.
+func (s *Store) LoadDiskPeaks() (map[string]metrics.DevicePeak, error) {
+	out := map[string]metrics.DevicePeak{}
+	v, err := s.GetSetting(keyDiskPeaks)
+	if errors.Is(err, ErrNotFound) {
+		return out, nil
+	}
+	if err != nil {
+		return out, err
+	}
+	if err := json.Unmarshal([]byte(v), &out); err != nil {
+		return map[string]metrics.DevicePeak{}, nil
+	}
+	return out, nil
+}
+
+// SaveDiskPeaks persists the per-device throughput highwater marks.
+func (s *Store) SaveDiskPeaks(peaks map[string]metrics.DevicePeak) error {
+	b, err := json.Marshal(peaks)
+	if err != nil {
+		return err
+	}
+	return s.SetSetting(keyDiskPeaks, string(b))
 }
 
 func (s *Store) getInt(key string) (int, error) {

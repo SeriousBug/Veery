@@ -98,6 +98,8 @@ func (s *Server) routes() {
 	// Settings.
 	s.mux.HandleFunc("GET /api/settings", s.requireAuth(s.handleGetSettings))
 	s.mux.HandleFunc("PUT /api/settings", s.requireAuth(s.handlePutSettings))
+	s.mux.HandleFunc("GET /api/disks", s.requireAuth(s.handleListDisks))
+	s.mux.HandleFunc("PUT /api/disks", s.requireAuth(s.handleSetDiskVisibility))
 
 	// Live push.
 	s.mux.HandleFunc("GET /ws", s.handleWS)

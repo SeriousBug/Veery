@@ -10,6 +10,8 @@ import {
   RefreshCw,
   KeyRound,
   PlusCircle,
+  HardDrive,
+  Activity,
 } from "lucide-react";
 import { css } from "styled-system/css";
 import { hstack, vstack } from "styled-system/patterns";
@@ -17,7 +19,7 @@ import { http, HttpError } from "../api/http";
 import { toaster } from "../lib/toaster";
 import { useAuth } from "../auth/AuthProvider";
 import { formatAge } from "../lib/format";
-import type { Settings as SettingsModel } from "../api/generated";
+import type { Settings as SettingsModel, DiskItem } from "../api/generated";
 
 export function Settings() {
   const [form, setForm] = useState<SettingsModel | null>(null);
@@ -143,7 +145,196 @@ export function Settings() {
         </div>
       )}
 
+      <DiskVisibilitySection />
+
       <PasskeysSection />
+    </div>
+  );
+}
+
+function DiskVisibilitySection() {
+  const [items, setItems] = useState<DiskItem[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    http
+      .get<DiskItem[]>("/api/disks")
+      .then((data) => {
+        if (!cancelled) setItems(data);
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setLoadError(err instanceof HttpError ? err.message : "Could not load disks.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function toggle(key: string, shown: boolean) {
+    if (!items) return;
+    const next = items.map((it) => (it.key === key ? { ...it, shown } : it));
+    setItems(next);
+    setSavingKey(key);
+    try {
+      const visibility: Record<string, boolean> = {};
+      for (const it of next) visibility[it.key] = it.shown;
+      const updated = await http.put<DiskItem[]>("/api/disks", { visibility });
+      setItems(updated);
+    } catch (err) {
+      setItems(items);
+      toaster.create({
+        type: "error",
+        title: "Couldn't update disks",
+        description: err instanceof HttpError ? err.message : "Please try again.",
+      });
+    } finally {
+      setSavingKey(null);
+    }
+  }
+
+  const capacity = items?.filter((it) => it.kind === "capacity") ?? [];
+  const activity = items?.filter((it) => it.kind === "activity") ?? [];
+
+  return (
+    <section
+      className={vstack({
+        gap: "5",
+        alignItems: "stretch",
+        p: "6",
+        borderRadius: "xl",
+        bg: "surface",
+        borderWidth: "1px",
+        borderColor: "border",
+        boxShadow: "card",
+      })}
+    >
+      <div className={vstack({ gap: "1", alignItems: "flex-start" })}>
+        <span className={hstack({ gap: "2.5" })}>
+          <HardDrive size={18} className={css({ color: "teal.500" })} />
+          <span className={css({ fontWeight: "extrabold", fontSize: "md" })}>Which disks to show</span>
+        </span>
+        <span className={css({ fontSize: "sm", color: "textMuted" })}>
+          Choose the drives that appear on the dashboard. Applies to everyone.
+        </span>
+      </div>
+
+      {loadError ? (
+        <p className={css({ color: "coral.600", fontWeight: "bold" })}>{loadError}</p>
+      ) : !items ? (
+        <span className={hstack({ gap: "2", color: "textMuted" })}>
+          <Loader2 size={18} className={css({ animation: "spin 0.9s linear infinite" })} />
+          Loading disks…
+        </span>
+      ) : items.length === 0 ? (
+        <p className={css({ color: "textMuted" })}>No disks detected on this machine.</p>
+      ) : (
+        <div className={vstack({ gap: "5", alignItems: "stretch" })}>
+          <DiskGroup
+            icon={<HardDrive size={15} className={css({ color: "textMuted" })} />}
+            title="Storage"
+            items={capacity}
+            savingKey={savingKey}
+            onToggle={toggle}
+          />
+          <DiskGroup
+            icon={<Activity size={15} className={css({ color: "textMuted" })} />}
+            title="Disk activity"
+            items={activity}
+            savingKey={savingKey}
+            onToggle={toggle}
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DiskGroup({
+  icon,
+  title,
+  items,
+  savingKey,
+  onToggle,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  items: DiskItem[];
+  savingKey: string | null;
+  onToggle: (key: string, shown: boolean) => void;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className={vstack({ gap: "2.5", alignItems: "stretch" })}>
+      <span className={hstack({ gap: "1.5", fontSize: "sm", fontWeight: "extrabold", color: "textMuted" })}>
+        {icon}
+        {title}
+      </span>
+      {items.map((it) => (
+        <Switch.Root
+          key={it.key}
+          checked={it.shown}
+          disabled={savingKey === it.key}
+          onCheckedChange={(d) => onToggle(it.key, d.checked)}
+          className={hstack({
+            justify: "space-between",
+            gap: "4",
+            p: "3.5",
+            borderRadius: "lg",
+            bg: "bg",
+            borderWidth: "1px",
+            borderColor: "border",
+            cursor: "pointer",
+            _disabled: { opacity: 0.7, cursor: "not-allowed" },
+          })}
+        >
+          <span className={vstack({ gap: "0", alignItems: "flex-start", minW: "0" })}>
+            <Switch.Label className={css({ fontWeight: "bold", color: "text" })}>
+              {it.label}
+            </Switch.Label>
+            <span
+              className={css({
+                fontSize: "xs",
+                color: "textMuted",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                maxW: "full",
+              })}
+            >
+              {it.detail}
+            </span>
+          </span>
+          <Switch.Control
+            className={css({
+              w: "12",
+              h: "7",
+              borderRadius: "full",
+              bg: "ink.200",
+              p: "1",
+              transition: "background 0.2s ease",
+              flexShrink: 0,
+              "&[data-state='checked']": { bg: "grape.500" },
+            })}
+          >
+            <Switch.Thumb
+              className={css({
+                display: "block",
+                w: "5",
+                h: "5",
+                borderRadius: "full",
+                bg: "white",
+                boxShadow: "card",
+                transition: "transform 0.2s ease",
+                "&[data-state='checked']": { transform: "translateX(20px)" },
+              })}
+            />
+          </Switch.Control>
+          <Switch.HiddenInput />
+        </Switch.Root>
+      ))}
     </div>
   );
 }
