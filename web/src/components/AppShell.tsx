@@ -12,6 +12,7 @@ import { css } from "styled-system/css";
 import { flex, hstack } from "styled-system/patterns";
 import { useAuth } from "../auth/AuthProvider";
 import { LiveDataProvider } from "../live/LiveData";
+import { MobileNav } from "./MobileNav";
 import { ToasterView } from "./ToasterView";
 
 const baseNavItems = [
@@ -89,7 +90,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           </span>
         </Link>
 
-        <div className={hstack({ gap: "2" })}>
+        <MobileNav
+          navItems={navItems}
+          user={user}
+          loggingOut={loggingOut}
+          onLogout={handleLogout}
+        />
+
+        <div className={hstack({ gap: "2", display: { base: "none", md: "flex" } })}>
           <nav className={hstack({ gap: "1" })}>
             {navItems.map(({ to, label, icon: Icon }) => (
               <Link
@@ -158,7 +166,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                     fontSize: "sm",
                     fontWeight: "bold",
                     color: "text",
-                    display: { base: "none", sm: "block" },
                   })}
                 >
                   {user.name}
