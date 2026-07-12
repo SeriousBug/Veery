@@ -175,6 +175,49 @@ func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+func (s *Server) handleRevokeInvite(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	if err := s.store.DeleteInvite(token); err != nil {
+		if isNotFound(err) {
+			writeErr(w, http.StatusNotFound, "invite not found")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	target, err := s.store.GetUser(id)
+	if err != nil {
+		if isNotFound(err) {
+			writeErr(w, http.StatusNotFound, "user not found")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	// Refuse to remove the last admin so the instance can't be locked out.
+	if target.IsAdmin {
+		admins, err := s.store.CountAdmins()
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "db error")
+			return
+		}
+		if admins <= 1 {
+			writeErr(w, http.StatusBadRequest, "cannot remove the last admin")
+			return
+		}
+	}
+	if err := s.store.DeleteUser(id); err != nil {
+		writeErr(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := s.store.ListUsers()
 	if err != nil {

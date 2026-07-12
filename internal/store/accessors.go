@@ -65,6 +65,25 @@ func (s *Store) ListUsers() ([]api.User, error) {
 	return out, rows.Err()
 }
 
+// CountAdmins returns the number of admin users.
+func (s *Store) CountAdmins() (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM users WHERE is_admin=1`).Scan(&n)
+	return n, err
+}
+
+// DeleteUser removes a user; credentials and sessions cascade via FK.
+func (s *Store) DeleteUser(id string) error {
+	res, err := s.db.Exec(`DELETE FROM users WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // --- Credentials ---
 
 // StoredCredential is a passkey row, decoded from the DB.
@@ -187,6 +206,18 @@ func (s *Store) ConsumeInvite(token string) error {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DeleteInvite removes an invite by token (used to revoke a pending invite).
+func (s *Store) DeleteInvite(token string) error {
+	res, err := s.db.Exec(`DELETE FROM invites WHERE token=?`, token)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound
 	}
 	return nil
