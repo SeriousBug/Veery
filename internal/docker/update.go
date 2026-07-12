@@ -7,6 +7,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/SeriousBug/Veery/internal/api"
 	"github.com/SeriousBug/Veery/internal/store"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
@@ -37,32 +38,40 @@ func (m *Manager) Update(ctx context.Context, managedID string) {
 		}
 	}
 	m.job(ctx, "update", mc.ContainerName, func(emit func(phase, msg string)) error {
-		return m.doUpdate(ctx, mc, emit)
+		updated, err := m.doUpdate(ctx, mc, emit)
+		switch {
+		case err != nil:
+			m.notify(api.EventUpdateApplied, "Update failed: "+mc.ContainerName, err.Error())
+		case updated:
+			m.notify(api.EventUpdateApplied, "Updated "+mc.ContainerName, "The container is running a newer image and came up healthy.")
+		}
+		return err
 	})
 }
 
 // doUpdate performs a transactional image update: the old container is parked
 // (renamed + stopped, not removed) while the new one is created and verified.
 // If the new container fails to come up healthy the change is rolled back to the
-// parked container, so a bad image can never leave a dead service.
-func (m *Manager) doUpdate(ctx context.Context, mc store.ManagedContainer, emit func(phase, msg string)) error {
+// parked container, so a bad image can never leave a dead service. It reports
+// whether the container actually moved to a new image.
+func (m *Manager) doUpdate(ctx context.Context, mc store.ManagedContainer, emit func(phase, msg string)) (bool, error) {
 	lock := m.containerLock(mc.ContainerName)
 	lock.Lock()
 	defer lock.Unlock()
 
 	snap, err := parseSnapshot(mc.SnapshotJSON)
 	if err != nil {
-		return err
+		return false, err
 	}
 	ref := snap.Image
 	if ref == "" {
-		return fmt.Errorf("snapshot has no image reference")
+		return false, fmt.Errorf("snapshot has no image reference")
 	}
 	name := mc.ContainerName
 
 	oldInsp, err := m.cli.ContainerInspect(ctx, name)
 	if err != nil {
-		return fmt.Errorf("inspect %s: %w", name, err)
+		return false, fmt.Errorf("inspect %s: %w", name, err)
 	}
 	oldImageID := oldInsp.Image
 
@@ -72,20 +81,20 @@ func (m *Manager) doUpdate(ctx context.Context, mc store.ManagedContainer, emit 
 	// out of scope for now.
 	rc, err := m.cli.ImagePull(ctx, ref, image.PullOptions{})
 	if err != nil {
-		return fmt.Errorf("pull %s: %w", ref, err)
+		return false, fmt.Errorf("pull %s: %w", ref, err)
 	}
 	if err := drainPull(rc, emit); err != nil {
-		return err
+		return false, err
 	}
 
 	newImg, err := m.cli.ImageInspect(ctx, ref)
 	if err != nil {
-		return fmt.Errorf("inspect image %s: %w", ref, err)
+		return false, fmt.Errorf("inspect image %s: %w", ref, err)
 	}
 	if newImg.ID == oldImageID {
 		emit("up-to-date", "Already up to date")
 		m.setUpdateAvailable(name, false)
-		return nil
+		return false, nil
 	}
 
 	// Park the old container under a suffixed name so its original name is free
@@ -94,7 +103,7 @@ func (m *Manager) doUpdate(ctx context.Context, mc store.ManagedContainer, emit 
 	oldParkedName := name + oldSuffix
 	_ = m.cli.ContainerRemove(ctx, oldParkedName, container.RemoveOptions{Force: true})
 	if err := m.cli.ContainerRename(ctx, oldInsp.ID, oldParkedName); err != nil {
-		return fmt.Errorf("park old container: %w", err)
+		return false, fmt.Errorf("park old container: %w", err)
 	}
 	if oldInsp.State != nil && oldInsp.State.Running {
 		_ = m.cli.ContainerStop(ctx, oldInsp.ID, container.StopOptions{})
@@ -104,13 +113,13 @@ func (m *Manager) doUpdate(ctx context.Context, mc store.ManagedContainer, emit 
 	newID, err := m.recreate(ctx, snap, ref)
 	if err != nil {
 		m.rollback(ctx, newID, oldInsp.ID, name, emit)
-		return fmt.Errorf("update failed, rolled back: recreate on new image: %w", err)
+		return false, fmt.Errorf("update failed, rolled back: recreate on new image: %w", err)
 	}
 
 	emit("verifying", "Verifying "+name)
 	if verr := m.verifyHealthy(ctx, newID); verr != nil {
 		m.rollback(ctx, newID, oldInsp.ID, name, emit)
-		return fmt.Errorf("update failed, rolled back: %w", verr)
+		return false, fmt.Errorf("update failed, rolled back: %w", verr)
 	}
 
 	// Success: drop the parked old container, refresh the snapshot, best-effort
@@ -127,7 +136,7 @@ func (m *Manager) doUpdate(ctx context.Context, mc store.ManagedContainer, emit 
 	m.setUpdateAvailable(name, false)
 
 	emit("updated", "Updated to "+shortID(newImg.ID))
-	return nil
+	return true, nil
 }
 
 // rollback restores the parked old container after a failed update: the new

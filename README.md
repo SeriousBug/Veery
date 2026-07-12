@@ -20,6 +20,9 @@ so the image stays small.
   and memory, pushed over a WebSocket into gauges.
 - Anything unhealthy, stopped, or restart-looping shows up in a "Needs attention" band with a
   button to fix it.
+- Notifications. Veery can tell you when a service breaks or comes back, when an update lands or
+  fails, when a new image is out, and when someone signs in. It sends to Discord, ntfy, Slack,
+  Telegram, Gotify, Pushover, Matrix, email, or a plain webhook.
 
 ### Scope
 
@@ -45,6 +48,33 @@ snapshot. The "Bring back up" button recreates a stack from its stored snapshot.
 | `VEERY_DB`     | `/data/veery.db`        | SQLite database path (persist this volume).                                                                    |
 | `HOST_PROC`    | (unset)                 | Set to `/host/proc` when running in a container, so host metrics are read from the mounted host `/proc`.        |
 | `HOST_SYS`     | (unset)                 | Set to `/host/sys` likewise for host `/sys`.                                                                   |
+| `VEERY_NOTIFY_URLS` | (unset)            | Where to send notifications, as whitespace-separated [Shoutrrr](https://containrrr.dev/shoutrrr/v0.8/services/overview/) URLs. Setting this makes notifications read-only in the UI. |
+| `VEERY_NOTIFY_EVENTS` | (unset)          | Which events to send, comma-separated: `container_status`, `update_applied`, `update_available`, `auth`. Unset means all of them. Only read when `VEERY_NOTIFY_URLS` is set. |
+
+### Notifications
+
+Configure them under Settings (admins only), or pin them with the environment variables above. A
+target is a Shoutrrr service URL, so most notification services work:
+
+```sh
+VEERY_NOTIFY_URLS="discord://token@channel-id ntfy://ntfy.sh/my-topic"
+VEERY_NOTIFY_EVENTS="container_status,update_applied"
+```
+
+To get the Discord form, take the webhook URL Discord gives you
+(`https://discord.com/api/webhooks/<channel-id>/<token>`) and write it as `discord://<token>@<channel-id>`.
+
+Veery sends four kinds of event, each of which can be switched off:
+
+| Event | Sent when |
+| ----- | --------- |
+| `container_status` | A container Veery manages stops, crashes, goes unhealthy, disappears, or comes back up. Containers you have not adopted are ignored. |
+| `update_applied` | An update finished, or failed and was rolled back. |
+| `update_available` | A newer image is out for a managed container that does not auto-update. |
+| `auth` | Someone signs in, or a passkey is enrolled. |
+
+Notification URLs contain webhook tokens and passwords, so only admins can read or change them, and
+they are never written to the logs.
 
 ## Running
 

@@ -227,6 +227,58 @@ export interface Settings {
   diskVisibility: { [key: string]: boolean};
 }
 /**
+ * NotificationEvent names a kind of event that can be delivered to the
+ * configured notification channels.
+ */
+export type NotificationEvent = string;
+/**
+ * EventUpdateApplied fires when an auto-update or a manual update finishes,
+ * whether it succeeded or was rolled back.
+ */
+export const EventUpdateApplied: NotificationEvent = "update_applied";
+/**
+ * EventUpdateAvailable fires when a newer image appears for a managed
+ * container that does not have auto-update enabled.
+ */
+export const EventUpdateAvailable: NotificationEvent = "update_available";
+/**
+ * EventContainerStatus fires when a managed container changes status, e.g.
+ * starts crash-looping, goes unhealthy, disappears, or recovers.
+ */
+export const EventContainerStatus: NotificationEvent = "container_status";
+/**
+ * EventAuth fires on passkey enrollment, logins and other account changes.
+ */
+export const EventAuth: NotificationEvent = "auth";
+/**
+ * NotificationConfig is where notifications go and which events are sent.
+ */
+export interface NotificationConfig {
+  /**
+   * URLs are Shoutrrr service URLs, one per target, e.g.
+   * "discord://token@channel" or "ntfy://ntfy.sh/my-topic". They carry
+   * credentials, so this config is admin-only.
+   */
+  urls: string[];
+  /**
+   * Events maps each NotificationEvent to whether it is delivered. Events
+   * absent from the map are treated as enabled.
+   */
+  events: { [key: NotificationEvent]: boolean};
+  /**
+   * EnvManaged reports that the config comes from VEERY_NOTIFY_URLS and so
+   * cannot be edited through the UI.
+   */
+  envManaged: boolean;
+}
+/**
+ * TestNotificationRequest sends a test message. URLs, when non-empty, are used
+ * instead of the saved ones so a channel can be checked before it is saved.
+ */
+export interface TestNotificationRequest {
+  urls: string[];
+}
+/**
  * SetDiskVisibilityRequest updates which disks are shown, for all users.
  */
 export interface SetDiskVisibilityRequest {

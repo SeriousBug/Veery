@@ -11,6 +11,7 @@ import (
 	"github.com/SeriousBug/Veery/internal/api"
 	"github.com/SeriousBug/Veery/internal/auth"
 	"github.com/SeriousBug/Veery/internal/docker"
+	"github.com/SeriousBug/Veery/internal/notify"
 	"github.com/SeriousBug/Veery/internal/store"
 	"github.com/SeriousBug/Veery/web"
 )
@@ -31,11 +32,23 @@ type Server struct {
 	hub   *Hub
 	mux   *http.ServeMux
 	dkr   *docker.Manager
+	notif *notify.Notifier
 }
 
 // SetDocker attaches the Docker manager used by container/stack handlers. It is
 // set after New so the constructor signature stays stable for tests.
 func (s *Server) SetDocker(m *docker.Manager) { s.dkr = m }
+
+// SetNotifier attaches the notifier used by the notification handlers and the
+// auth events. Set after New, like SetDocker.
+func (s *Server) SetNotifier(n *notify.Notifier) { s.notif = n }
+
+// notify delivers an event if a notifier is attached.
+func (s *Server) notify(ev api.NotificationEvent, title, body string) {
+	if s.notif != nil {
+		s.notif.Notify(ev, title, body)
+	}
+}
 
 // New builds a Server with routes registered.
 func New(st *store.Store, mgr *auth.Manager, cfg Config) *Server {
@@ -100,6 +113,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /api/settings", s.requireAuth(s.handlePutSettings))
 	s.mux.HandleFunc("GET /api/disks", s.requireAuth(s.handleListDisks))
 	s.mux.HandleFunc("PUT /api/disks", s.requireAuth(s.handleSetDiskVisibility))
+
+	// Notifications (admin): the service URLs embed webhook tokens, so unlike
+	// the rest of settings these are not readable by every signed-in user.
+	s.mux.HandleFunc("GET /api/notifications", s.requireAdmin(s.handleGetNotifications))
+	s.mux.HandleFunc("PUT /api/notifications", s.requireAdmin(s.handlePutNotifications))
+	s.mux.HandleFunc("POST /api/notifications/test", s.requireAdmin(s.handleTestNotification))
 
 	// Live push.
 	s.mux.HandleFunc("GET /ws", s.handleWS)

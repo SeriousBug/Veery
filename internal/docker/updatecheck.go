@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SeriousBug/Veery/internal/api"
 	"github.com/SeriousBug/Veery/internal/store"
 )
 
@@ -36,19 +37,57 @@ func (m *Manager) CheckUpdates(ctx context.Context) {
 		log.Printf("update-check: list managed: %v", err)
 		return
 	}
+	m.seedUpdateAvail()
 	changed := false
 	for _, mc := range managed {
 		if ctx.Err() != nil {
 			return
 		}
 		avail := m.remoteHasNewImage(ctx, mc)
-		if m.updateAvailableFor(mc.ContainerName) != avail {
+		if was := m.updateAvailableFor(mc.ContainerName); was != avail {
 			changed = true
+			// Auto-updating containers are left alone: the update runs on its
+			// own and reports its outcome, so announcing it here is noise.
+			if avail && !mc.AutoUpdate {
+				m.notify(api.EventUpdateAvailable, "Update available for "+mc.ContainerName,
+					"A newer image has been published. Auto-update is off for this container, so it will keep running the current image until you update it.")
+			}
 		}
 		m.setUpdateAvailable(mc.ContainerName, avail)
 	}
 	if changed {
+		m.persistUpdateAvail()
 		m.BroadcastStacks(ctx)
+	}
+}
+
+// seedUpdateAvail loads the update-available flags recorded by the last sweep,
+// once per process. Without it every restart would re-announce every update
+// that is still pending.
+func (m *Manager) seedUpdateAvail() {
+	m.availMu.Lock()
+	defer m.availMu.Unlock()
+	if m.availBaseline {
+		return
+	}
+	saved, err := m.st.LoadNotifiedUpdates()
+	if err != nil {
+		log.Printf("update-check: load last update flags: %v", err)
+		return
+	}
+	m.updateAvail = saved
+	m.availBaseline = true
+}
+
+func (m *Manager) persistUpdateAvail() {
+	m.availMu.Lock()
+	snapshot := make(map[string]bool, len(m.updateAvail))
+	for k, v := range m.updateAvail {
+		snapshot[k] = v
+	}
+	m.availMu.Unlock()
+	if err := m.st.SaveNotifiedUpdates(snapshot); err != nil {
+		log.Printf("update-check: save update flags: %v", err)
 	}
 }
 
