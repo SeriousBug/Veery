@@ -238,6 +238,9 @@ export function NotificationTarget({
               fontSize: "xs",
               color: "textMuted",
               wordBreak: "break-all",
+              pl: "3",
+              borderLeftWidth: "2px",
+              borderColor: "border",
             })}
           >
             {url}
