@@ -43,7 +43,7 @@ export function Dashboard() {
             </div>
             {managed.length === 0 ? (
               <p className={css({ color: "textMuted" })}>
-                No managed services yet. Adopt one below to get started.
+                Nothing set up yet — add one of the services found below.
               </p>
             ) : (
               <div className={grid({ columns: { base: 1, sm: 2, lg: 3 }, gap: "4" })}>

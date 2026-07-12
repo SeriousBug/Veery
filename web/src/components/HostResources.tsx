@@ -46,7 +46,7 @@ export function HostResources() {
           {host.disks.map((d) => (
             <Gauge
               key={d.mount}
-              label={`Storage · ${d.mount}`}
+              label={<DiskLabel mount={d.mount} />}
               value={formatUsage(d.used, d.total)}
               pct={ratioPct(d.used, d.total)}
               icon={<HardDrive size={15} />}
@@ -67,6 +67,26 @@ export function HostResources() {
         </div>
       )}
     </section>
+  );
+}
+
+function diskName(mount: string): string {
+  if (mount === "/") return "Main disk";
+  const segment = mount.split("/").filter(Boolean).pop();
+  if (!segment) return "Disk";
+  return segment.charAt(0).toUpperCase() + segment.slice(1) + " disk";
+}
+
+function DiskLabel({ mount }: { mount: string }) {
+  return (
+    <span className={hstack({ gap: "1.5" })}>
+      {diskName(mount)}
+      {mount !== "/" && (
+        <span className={css({ color: "textMuted", fontWeight: "medium", opacity: 0.7 })}>
+          {mount}
+        </span>
+      )}
+    </span>
   );
 }
 

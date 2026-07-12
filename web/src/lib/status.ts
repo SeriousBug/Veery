@@ -7,7 +7,7 @@ import {
   HelpCircle,
   type LucideIcon,
 } from "lucide-react";
-import type { ContainerStatus } from "../api/generated";
+import type { ContainerStatus, Stack } from "../api/generated";
 
 export type StatusTone = "ok" | "idle" | "attention" | "busy";
 
@@ -81,4 +81,38 @@ export function statusMeta(status: ContainerStatus): StatusMeta {
 
 export function needsAttention(status: ContainerStatus): boolean {
   return status === "needs_attention" || status === "missing";
+}
+
+/**
+ * True when a stack has a removed container that a plain restart can't recreate,
+ * so recovery must use "bringup" instead.
+ */
+export function stackNeedsBringUp(stack: Stack): boolean {
+  return (
+    stack.status === "missing" ||
+    stack.containers.some((c) => c.status === "missing")
+  );
+}
+
+/**
+ * Plain-language explanation of why a stack is in the attention band, picking the
+ * most severe symptom across its containers. Written for non-technical users.
+ */
+export function attentionReason(stack: Stack): string {
+  const cs = stack.containers;
+  const some = (fn: (c: Stack["containers"][number]) => boolean) => cs.some(fn);
+
+  if (stackNeedsBringUp(stack)) {
+    return "One part isn't running and needs to be started back up.";
+  }
+  if (some((c) => c.state === "exited" || c.state === "dead")) {
+    return "This stopped unexpectedly.";
+  }
+  if (some((c) => c.state === "restarting")) {
+    return "This keeps restarting.";
+  }
+  if (some((c) => c.health === "unhealthy")) {
+    return "This is running but not responding properly.";
+  }
+  return "This stopped unexpectedly.";
 }

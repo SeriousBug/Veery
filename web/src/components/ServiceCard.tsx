@@ -30,6 +30,8 @@ export function ServiceCard({
   const updateAvailable = stack.containers.some((c) => c.updateAvailable);
   const busy = stackBusy(stack, jobs);
   const count = stack.containers.length;
+  const updateImage = (stack.containers.find((c) => c.updateAvailable) ?? stack.containers[0])
+    ?.image;
 
   return (
     <div
@@ -104,6 +106,8 @@ export function ServiceCard({
         status={stack.status}
         busy={busy}
         updateAvailable={updateAvailable}
+        showUpdate={stack.managed}
+        updateImage={updateImage}
         size="sm"
         handlers={{
           onStart: () => stackAction(stack.id, "start"),

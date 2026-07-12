@@ -1,10 +1,22 @@
 import { useEffect, useState } from "react";
 import { Switch } from "@ark-ui/react";
-import { Loader2, Save, SlidersHorizontal, Timer, RefreshCw } from "lucide-react";
+import { startRegistration } from "@simplewebauthn/browser";
+import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
+import {
+  Loader2,
+  Save,
+  SlidersHorizontal,
+  Timer,
+  RefreshCw,
+  KeyRound,
+  PlusCircle,
+} from "lucide-react";
 import { css } from "styled-system/css";
 import { hstack, vstack } from "styled-system/patterns";
 import { http, HttpError } from "../api/http";
 import { toaster } from "../lib/toaster";
+import { useAuth } from "../auth/AuthProvider";
+import { formatAge } from "../lib/format";
 import type { Settings as SettingsModel } from "../api/generated";
 
 export function Settings() {
@@ -88,7 +100,7 @@ export function Settings() {
 
           <ToggleField
             title="Auto-update new services by default"
-            hint="Newly adopted services will keep themselves up to date unless you turn it off."
+            hint="Services you add will keep themselves up to date unless you turn it off."
             checked={form.autoUpdateDefault}
             onChange={(v) => setForm({ ...form, autoUpdateDefault: v })}
           />
@@ -130,7 +142,133 @@ export function Settings() {
           </button>
         </div>
       )}
+
+      <PasskeysSection />
     </div>
+  );
+}
+
+interface DeviceRegistrationOptions {
+  publicKey: PublicKeyCredentialCreationOptionsJSON;
+}
+
+function PasskeysSection() {
+  const { credentials, refresh } = useAuth();
+  const [busy, setBusy] = useState(false);
+
+  async function addDevice() {
+    setBusy(true);
+    try {
+      const options = await http.post<DeviceRegistrationOptions>(
+        "/auth/register/device/begin",
+      );
+      const credential = await startRegistration({ optionsJSON: options.publicKey });
+      await http.post(
+        "/auth/register/device/finish",
+        credential as unknown as Record<string, unknown>,
+      );
+      await refresh();
+      toaster.create({
+        type: "success",
+        title: "New device added",
+        description: "You can now sign in with it.",
+        duration: 4000,
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        // User cancelled the browser prompt; stay quiet.
+      } else {
+        toaster.create({
+          type: "error",
+          title: "Couldn't add that device",
+          description:
+            err instanceof HttpError ? err.message : "Please try again.",
+        });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section
+      className={vstack({
+        gap: "5",
+        alignItems: "stretch",
+        p: "6",
+        borderRadius: "xl",
+        bg: "surface",
+        borderWidth: "1px",
+        borderColor: "border",
+        boxShadow: "card",
+      })}
+    >
+      <div className={vstack({ gap: "1", alignItems: "flex-start" })}>
+        <span className={hstack({ gap: "2.5" })}>
+          <KeyRound size={18} className={css({ color: "grape.500" })} />
+          <span className={css({ fontWeight: "extrabold", fontSize: "md" })}>
+            Your devices
+          </span>
+        </span>
+        <span className={css({ fontSize: "sm", color: "textMuted" })}>
+          Add your other phone or a backup key so you never get locked out.
+        </span>
+      </div>
+
+      {credentials.length > 0 && (
+        <div className={vstack({ gap: "2.5", alignItems: "stretch" })}>
+          {credentials.map((cred) => (
+            <div
+              key={cred.id}
+              className={hstack({
+                justify: "space-between",
+                gap: "3",
+                flexWrap: "wrap",
+                p: "3.5",
+                borderRadius: "lg",
+                bg: "bg",
+                borderWidth: "1px",
+                borderColor: "border",
+              })}
+            >
+              <span className={hstack({ gap: "2.5", minW: "0" })}>
+                <KeyRound size={16} className={css({ color: "teal.500" })} />
+                <span className={css({ fontWeight: "bold", color: "text" })}>{cred.name}</span>
+              </span>
+              <span className={css({ fontSize: "sm", color: "textMuted" })}>
+                Added {formatAge(cred.createdAt)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        onClick={addDevice}
+        disabled={busy}
+        className={hstack({
+          gap: "2",
+          alignSelf: "flex-start",
+          px: "5",
+          py: "2.5",
+          borderRadius: "full",
+          bg: "accent",
+          color: "white",
+          fontWeight: "extrabold",
+          cursor: "pointer",
+          boxShadow: "card",
+          _hover: { bg: "accentHover" },
+          _disabled: { opacity: 0.6, cursor: "not-allowed" },
+        })}
+      >
+        {busy ? (
+          <Loader2 size={18} className={css({ animation: "spin 0.9s linear infinite" })} />
+        ) : (
+          <PlusCircle size={18} />
+        )}
+        Add another device
+      </button>
+    </section>
   );
 }
 

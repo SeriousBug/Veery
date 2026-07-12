@@ -28,6 +28,8 @@ export function ServiceDetail({ id }: { id: string }) {
   }
 
   const updateAvailable = stack.containers.some((c) => c.updateAvailable);
+  const updateImage = (stack.containers.find((c) => c.updateAvailable) ?? stack.containers[0])
+    ?.image;
   const busy = stackBusy(stack, jobs);
   const metricsById = new Map<string, ContainerMetrics>(
     (metrics?.containers ?? []).map((m) => [m.id, m]),
@@ -79,6 +81,8 @@ export function ServiceDetail({ id }: { id: string }) {
           status={stack.status}
           busy={busy}
           updateAvailable={updateAvailable}
+          showUpdate={stack.managed}
+          updateImage={updateImage}
           handlers={{
             onStart: () => stackAction(stack.id, "start"),
             onStop: () => stackAction(stack.id, "stop"),
@@ -180,6 +184,8 @@ function ContainerPanel({
         status={container.status}
         busy={busy}
         updateAvailable={container.updateAvailable}
+        showUpdate={container.managed}
+        updateImage={container.image}
         size="sm"
         handlers={{
           onStart: () => containerAction(container.id, "start"),

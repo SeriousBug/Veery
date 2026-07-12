@@ -6,6 +6,7 @@ import {
   ArrowUpCircle,
   LifeBuoy,
   Loader2,
+  CheckCircle2,
 } from "lucide-react";
 import { css, cx } from "styled-system/css";
 import { hstack } from "styled-system/patterns";
@@ -53,6 +54,8 @@ export function ActionBar({
   status,
   busy,
   updateAvailable,
+  showUpdate,
+  updateImage,
   size = "md",
   handlers,
 }: {
@@ -60,10 +63,15 @@ export function ActionBar({
   status: ContainerStatus;
   busy?: JobProgress;
   updateAvailable?: boolean;
+  /** Show an update affordance even when no update is available (managed services). */
+  showUpdate?: boolean;
+  /** Current image/tag, shown in the update confirmation for power users. */
+  updateImage?: string;
   size?: "sm" | "md";
   handlers: ActionHandlers;
 }) {
   const [confirmStop, setConfirmStop] = useState(false);
+  const [confirmUpdate, setConfirmUpdate] = useState(false);
 
   if (busy) {
     return (
@@ -120,9 +128,32 @@ export function ActionBar({
 
   if (updateAvailable) {
     buttons.push(
-      <button key="update" className={btn("update", size)} onClick={handlers.onUpdate}>
-        <ArrowUpCircle size={16} /> Update
+      <button
+        key="update"
+        className={btn("update", size)}
+        onClick={() => setConfirmUpdate(true)}
+      >
+        <ArrowUpCircle size={16} /> Update now
       </button>,
+    );
+  } else if (showUpdate) {
+    buttons.push(
+      <span
+        key="uptodate"
+        className={hstack({
+          gap: "1.5",
+          px: size === "sm" ? "3.5" : "4",
+          py: size === "sm" ? "2" : "2.5",
+          borderRadius: "full",
+          bg: "mint.300",
+          color: "teal.600",
+          fontWeight: "extrabold",
+          fontSize: "sm",
+          whiteSpace: "nowrap",
+        })}
+      >
+        <CheckCircle2 size={16} /> Up to date
+      </span>,
     );
   }
 
@@ -137,6 +168,35 @@ export function ActionBar({
         confirmLabel="Yes, stop it"
         tone="danger"
         onConfirm={handlers.onStop}
+      />
+      <ConfirmDialog
+        open={confirmUpdate}
+        onOpenChange={setConfirmUpdate}
+        title={`Update ${name}?`}
+        description={
+          <>
+            This installs the newest version. {name} will restart and may be offline for
+            a minute. Nothing is deleted, and Veery automatically undoes the update if the
+            new version fails to start.
+            {updateImage && (
+              <span
+                className={css({
+                  display: "block",
+                  mt: "3",
+                  fontSize: "sm",
+                  fontFamily: "monospace",
+                  color: "text",
+                  wordBreak: "break-all",
+                })}
+              >
+                {updateImage}
+              </span>
+            )}
+          </>
+        }
+        confirmLabel="Update now"
+        cancelLabel="Not now"
+        onConfirm={handlers.onUpdate}
       />
     </>
   );

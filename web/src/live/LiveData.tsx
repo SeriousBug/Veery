@@ -41,12 +41,48 @@ function loadingTitle(job: JobProgress): string {
   return LOADING_VERB[job.kind] ?? "Working on it…";
 }
 
+/** Resolve a friendly display name for a job target (stack or container id/name). */
+function targetName(stacks: Stack[], target: string): string | null {
+  for (const s of stacks) {
+    if (s.id === target) return s.name;
+    for (const c of s.containers) {
+      if (c.id === target || c.containerName === target) return c.name;
+    }
+  }
+  return null;
+}
+
+/** Brief, celebratory success message keyed on the action kind. */
+function successToast(job: JobProgress, name: string | null): { title: string; description?: string } {
+  const who = name ?? "It";
+  switch (job.kind) {
+    case "update":
+      return { title: `${who} is updated` };
+    case "restart":
+    case "bringup":
+    case "recreate":
+    case "start":
+      return { title: `${who} is back up and running` };
+    case "stop":
+      return { title: `${who} is stopped` };
+    case "adopt":
+      return { title: `${who} is now managed by Veery` };
+    default:
+      return { title: "All set!", description: job.message || "Done." };
+  }
+}
+
 export function LiveDataProvider({ children }: { children: ReactNode }) {
   const [stacks, setStacks] = useState<Stack[]>([]);
   const [metrics, setMetrics] = useState<MetricsSnapshot | null>(null);
   const [jobs, setJobs] = useState<Map<string, JobProgress>>(new Map());
   const [loading, setLoading] = useState(true);
   const seenToasts = useRef<Set<string>>(new Set());
+  const stacksRef = useRef<Stack[]>([]);
+
+  useEffect(() => {
+    stacksRef.current = stacks;
+  }, [stacks]);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,8 +147,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
           }
         : {
             type: "success",
-            title: "All set!",
-            description: job.message || "Done.",
+            ...successToast(job, targetName(stacksRef.current, job.target)),
             duration: 4000,
           };
       if (seenToasts.current.has(job.id)) {

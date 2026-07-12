@@ -52,7 +52,7 @@ function DiscoveredRow({ stack }: { stack: Stack }) {
       <div className={vstack({ gap: "0.5", alignItems: "flex-start", minW: "0" })}>
         <span className={css({ fontWeight: "extrabold", fontSize: "md" })}>{stack.name}</span>
         <span className={css({ fontSize: "sm", color: "textMuted" })}>
-          Start managing this so Veery can restart or update it.
+          Veery will be able to restart or update it for you. This won't change or delete anything.
         </span>
       </div>
       <button
@@ -78,7 +78,7 @@ function DiscoveredRow({ stack }: { stack: Stack }) {
         ) : (
           <PlusCircle size={16} />
         )}
-        Adopt
+        Let Veery manage this
       </button>
     </div>
   );

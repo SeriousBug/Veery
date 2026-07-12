@@ -1,11 +1,11 @@
-import { AlertTriangle, RotateCw, LifeBuoy, PartyPopper, Loader2 } from "lucide-react";
+import { AlertTriangle, LifeBuoy, PartyPopper, Loader2 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { css } from "styled-system/css";
 import { hstack, vstack } from "styled-system/patterns";
 import { StatusPill } from "./StatusPill";
 import { stackBusy } from "./ServiceCard";
 import { stackAction } from "../lib/actions";
-import { needsAttention } from "../lib/status";
+import { needsAttention, attentionReason, stackNeedsBringUp } from "../lib/status";
 import type { JobProgress, Stack } from "../api/generated";
 
 export function AttentionBand({
@@ -67,10 +67,8 @@ export function AttentionBand({
         {problems.map((stack) => {
           const busy = stackBusy(stack, jobs);
           // A stack with any missing container aggregates to needs_attention,
-          // but Restart can't recreate a removed container — Bring back up can.
-          const missing =
-            stack.status === "missing" ||
-            stack.containers.some((c) => c.status === "missing");
+          // but Restart can't recreate a removed container — bringup can.
+          const bringUp = stackNeedsBringUp(stack);
           return (
             <div
               key={stack.id}
@@ -84,21 +82,26 @@ export function AttentionBand({
                 boxShadow: "card",
               })}
             >
-              <div className={hstack({ gap: "3", minW: "0" })}>
-                <Link
-                  to="/service/$id"
-                  params={{ id: stack.id }}
-                  className={css({
-                    fontWeight: "extrabold",
-                    fontSize: "md",
-                    color: "text",
-                    textDecoration: "none",
-                    _hover: { color: "grape.600" },
-                  })}
-                >
-                  {stack.name}
-                </Link>
-                <StatusPill status={stack.status} size="sm" />
+              <div className={vstack({ gap: "1", alignItems: "flex-start", minW: "0" })}>
+                <div className={hstack({ gap: "3", minW: "0" })}>
+                  <Link
+                    to="/service/$id"
+                    params={{ id: stack.id }}
+                    className={css({
+                      fontWeight: "extrabold",
+                      fontSize: "md",
+                      color: "text",
+                      textDecoration: "none",
+                      _hover: { color: "grape.600" },
+                    })}
+                  >
+                    {stack.name}
+                  </Link>
+                  <StatusPill status={stack.status} size="sm" />
+                </div>
+                <p className={css({ fontSize: "sm", color: "ink.700", fontWeight: "medium" })}>
+                  {attentionReason(stack)}
+                </p>
               </div>
 
               {busy ? (
@@ -119,7 +122,7 @@ export function AttentionBand({
                 </span>
               ) : (
                 <button
-                  onClick={() => stackAction(stack.id, missing ? "bringup" : "restart")}
+                  onClick={() => stackAction(stack.id, bringUp ? "bringup" : "restart")}
                   className={hstack({
                     gap: "1.5",
                     px: "5",
@@ -134,8 +137,8 @@ export function AttentionBand({
                     _hover: { bg: "accentHover" },
                   })}
                 >
-                  {missing ? <LifeBuoy size={16} /> : <RotateCw size={16} />}
-                  {missing ? "Bring back up" : "Restart"}
+                  <LifeBuoy size={16} />
+                  Get it running again
                 </button>
               )}
             </div>

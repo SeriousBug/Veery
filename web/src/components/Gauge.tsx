@@ -26,7 +26,7 @@ export function Gauge({
   pct,
   icon,
 }: {
-  label: string;
+  label: ReactNode;
   value: string;
   pct: number;
   icon?: ReactNode;

@@ -9,6 +9,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel,
+  cancelLabel = "Never mind",
   tone = "accent",
   onConfirm,
 }: {
@@ -17,6 +18,7 @@ export function ConfirmDialog({
   title: string;
   description: ReactNode;
   confirmLabel: string;
+  cancelLabel?: string;
   tone?: "accent" | "danger";
   onConfirm: () => void;
 }) {
@@ -83,7 +85,7 @@ export function ConfirmDialog({
                   _hover: { bg: "ink.200" },
                 })}
               >
-                Never mind
+                {cancelLabel}
               </Dialog.CloseTrigger>
               <button
                 onClick={() => {
