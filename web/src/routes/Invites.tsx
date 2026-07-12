@@ -7,13 +7,21 @@ import {
   Mail,
   Plus,
   ShieldCheck,
+  Trash2,
   UserRound,
   Users,
 } from "lucide-react";
 import { css } from "styled-system/css";
 import { flex, hstack, vstack, grid } from "styled-system/patterns";
-import { http } from "../api/http";
+import { http, HttpError } from "../api/http";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { useAuth } from "../auth/AuthProvider";
+import { toaster } from "../lib/toaster";
 import type { Invite, User } from "../api/generated";
+
+type ConfirmTarget =
+  | { kind: "invite"; token: string }
+  | { kind: "user"; id: string; name: string };
 
 function useCopy() {
   const [copied, setCopied] = useState<string | null>(null);
@@ -70,7 +78,9 @@ function CopyButton({
 export function Invites() {
   const queryClient = useQueryClient();
   const { copied, copy } = useCopy();
+  const { user: me } = useAuth();
   const [makeAdmin, setMakeAdmin] = useState(false);
+  const [confirm, setConfirm] = useState<ConfirmTarget | null>(null);
 
   const invitesQuery = useQuery({
     queryKey: ["invites"],
@@ -87,6 +97,34 @@ export function Invites() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invites"] });
     },
+  });
+
+  const revokeInvite = useMutation({
+    mutationFn: (token: string) => http.del(`/api/invites/${token}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["invites"] });
+      toaster.create({ type: "success", title: "Invite revoked", duration: 3000 });
+    },
+    onError: (err) =>
+      toaster.create({
+        type: "error",
+        title: err instanceof HttpError ? err.message : "Couldn't revoke that invite",
+        duration: 4000,
+      }),
+  });
+
+  const deleteUser = useMutation({
+    mutationFn: (id: string) => http.del(`/api/users/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      toaster.create({ type: "success", title: "Person removed", duration: 3000 });
+    },
+    onError: (err) =>
+      toaster.create({
+        type: "error",
+        title: err instanceof HttpError ? err.message : "Couldn't remove that person",
+        duration: 4000,
+      }),
   });
 
   const invites = invitesQuery.data ?? [];
@@ -283,6 +321,26 @@ export function Invites() {
                   copied={copied}
                   onCopy={copy}
                 />
+                <button
+                  onClick={() => setConfirm({ kind: "invite", token: invite.token })}
+                  aria-label="Revoke invite"
+                  title="Revoke invite"
+                  className={flex({
+                    align: "center",
+                    justify: "center",
+                    w: "9",
+                    h: "9",
+                    borderRadius: "full",
+                    bg: "coral.100",
+                    color: "coral.600",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                    transition: "all 0.15s ease",
+                    _hover: { bg: "coral.200" },
+                  })}
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
             ))}
           </div>
@@ -333,6 +391,9 @@ export function Invites() {
                 <div className={vstack({ gap: "0", alignItems: "flex-start", minW: "0" })}>
                   <span className={css({ fontWeight: "bold", truncate: true, maxW: "full" })}>
                     {user.name}
+                    {me?.id === user.id && (
+                      <span className={css({ color: "textMuted", fontWeight: "medium" })}> (you)</span>
+                    )}
                   </span>
                   {user.isAdmin && (
                     <span
@@ -346,11 +407,60 @@ export function Invites() {
                     </span>
                   )}
                 </div>
+                {me?.id !== user.id && (
+                  <button
+                    onClick={() =>
+                      setConfirm({ kind: "user", id: user.id, name: user.name })
+                    }
+                    aria-label={`Remove ${user.name}`}
+                    title="Remove person"
+                    className={flex({
+                      align: "center",
+                      justify: "center",
+                      w: "9",
+                      h: "9",
+                      ml: "auto",
+                      borderRadius: "full",
+                      bg: "coral.100",
+                      color: "coral.600",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      transition: "all 0.15s ease",
+                      _hover: { bg: "coral.200" },
+                    })}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
         )}
       </section>
+
+      <ConfirmDialog
+        open={confirm !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirm(null);
+        }}
+        title={confirm?.kind === "user" ? "Remove this person?" : "Revoke this invite?"}
+        description={
+          confirm?.kind === "user" ? (
+            <>
+              <strong>{confirm.name}</strong> will lose access immediately and all their
+              passkeys will be removed. This can't be undone.
+            </>
+          ) : (
+            "This enrollment link will stop working right away. You can always create a new one."
+          )
+        }
+        confirmLabel={confirm?.kind === "user" ? "Remove" : "Revoke"}
+        tone="danger"
+        onConfirm={() => {
+          if (confirm?.kind === "invite") revokeInvite.mutate(confirm.token);
+          else if (confirm?.kind === "user") deleteUser.mutate(confirm.id);
+        }}
+      />
     </div>
   );
 }

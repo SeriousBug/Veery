@@ -31,6 +31,8 @@ export default defineConfig({
             600: { value: "#0d9488" },
           },
           coral: {
+            100: { value: "#ffe4e6" },
+            200: { value: "#fecdd3" },
             300: { value: "#fda4af" },
             400: { value: "#fb7185" },
             500: { value: "#f43f5e" },
