@@ -10,6 +10,7 @@ import (
 
 	"github.com/SeriousBug/Veery/internal/api"
 	"github.com/SeriousBug/Veery/internal/auth"
+	"github.com/SeriousBug/Veery/internal/docker"
 	"github.com/SeriousBug/Veery/internal/store"
 	"github.com/SeriousBug/Veery/web"
 )
@@ -29,7 +30,12 @@ type Server struct {
 	spa   fs.FS
 	hub   *Hub
 	mux   *http.ServeMux
+	dkr   *docker.Manager
 }
+
+// SetDocker attaches the Docker manager used by container/stack handlers. It is
+// set after New so the constructor signature stays stable for tests.
+func (s *Server) SetDocker(m *docker.Manager) { s.dkr = m }
 
 // New builds a Server with routes registered.
 func New(st *store.Store, mgr *auth.Manager, cfg Config) *Server {
@@ -68,6 +74,23 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/invites", s.requireAdmin(s.handleListInvites))
 	s.mux.HandleFunc("POST /api/invites", s.requireAdmin(s.handleCreateInvite))
 	s.mux.HandleFunc("GET /api/users", s.requireAdmin(s.handleListUsers))
+
+	// Stacks & containers.
+	s.mux.HandleFunc("GET /api/stacks", s.requireAuth(s.handleListStacks))
+	s.mux.HandleFunc("POST /api/stacks/{id}/adopt", s.requireAuth(s.handleAdoptStack))
+	s.mux.HandleFunc("POST /api/stacks/{id}/start", s.requireAuth(s.handleStackAction("start")))
+	s.mux.HandleFunc("POST /api/stacks/{id}/stop", s.requireAuth(s.handleStackAction("stop")))
+	s.mux.HandleFunc("POST /api/stacks/{id}/restart", s.requireAuth(s.handleStackAction("restart")))
+	s.mux.HandleFunc("POST /api/stacks/{id}/bringup", s.requireAuth(s.handleStackAction("bringup")))
+	s.mux.HandleFunc("POST /api/containers/{id}/start", s.requireAuth(s.handleContainerAction("start")))
+	s.mux.HandleFunc("POST /api/containers/{id}/stop", s.requireAuth(s.handleContainerAction("stop")))
+	s.mux.HandleFunc("POST /api/containers/{id}/restart", s.requireAuth(s.handleContainerAction("restart")))
+	s.mux.HandleFunc("POST /api/containers/{id}/update", s.requireAuth(s.handleContainerUpdate))
+	s.mux.HandleFunc("POST /api/containers/autoupdate", s.requireAuth(s.handleSetAutoUpdate))
+
+	// Settings.
+	s.mux.HandleFunc("GET /api/settings", s.requireAuth(s.handleGetSettings))
+	s.mux.HandleFunc("PUT /api/settings", s.requireAuth(s.handlePutSettings))
 
 	// Live push.
 	s.mux.HandleFunc("GET /ws", s.handleWS)
