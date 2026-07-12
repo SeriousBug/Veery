@@ -38,6 +38,9 @@ type Invite struct {
 	ExpiresAt int64  `json:"expiresAt"`
 	UsedAt    int64  `json:"usedAt"`
 	URL       string `json:"url"`
+	// ForUserName is set on recovery invites: the display name of the existing
+	// user this link re-enrolls a passkey for. Empty on normal invites.
+	ForUserName string `json:"forUserName,omitempty"`
 }
 
 // Container is a single managed or discovered container.

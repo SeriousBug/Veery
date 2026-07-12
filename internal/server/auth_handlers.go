@@ -143,7 +143,7 @@ func (s *Server) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 	u, _ := userFrom(r.Context())
 	var req api.CreateInviteRequest
 	json.NewDecoder(r.Body).Decode(&req)
-	token, exp, err := auth.NewInvite(s.store, u.ID, req.IsAdmin)
+	token, exp, err := auth.NewInvite(s.store, u.ID, "", req.IsAdmin)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "db error")
 		return
@@ -162,17 +162,52 @@ func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "db error")
 		return
 	}
+	names := map[string]string{}
+	if users, err := s.store.ListUsers(); err == nil {
+		for _, u := range users {
+			names[u.ID] = u.Name
+		}
+	}
 	out := []api.Invite{}
 	for _, iv := range rows {
 		out = append(out, api.Invite{
-			Token:     iv.Token,
-			IsAdmin:   iv.IsAdmin,
-			ExpiresAt: iv.ExpiresAt,
-			UsedAt:    iv.UsedAt,
-			URL:       auth.InviteURL(s.cfg.Origin, iv.Token),
+			Token:       iv.Token,
+			IsAdmin:     iv.IsAdmin,
+			ExpiresAt:   iv.ExpiresAt,
+			UsedAt:      iv.UsedAt,
+			URL:         auth.InviteURL(s.cfg.Origin, iv.Token),
+			ForUserName: names[iv.ForUser],
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// handleResetUser mints a single-use recovery invite bound to an existing user.
+// Enrolling on the returned link adds a fresh passkey to that user, restoring
+// access without changing their identity or admin status.
+func (s *Server) handleResetUser(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	u, err := s.store.GetUser(id)
+	if err != nil {
+		if isNotFound(err) {
+			writeErr(w, http.StatusNotFound, "user not found")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	token, exp, err := auth.NewInvite(s.store, "", u.ID, u.IsAdmin)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	writeJSON(w, http.StatusOK, api.Invite{
+		Token:       token,
+		IsAdmin:     u.IsAdmin,
+		ExpiresAt:   exp.Unix(),
+		URL:         auth.InviteURL(s.cfg.Origin, token),
+		ForUserName: u.Name,
+	})
 }
 
 func (s *Server) handleRevokeInvite(w http.ResponseWriter, r *http.Request) {

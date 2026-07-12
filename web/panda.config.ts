@@ -25,10 +25,12 @@ export default defineConfig({
             900: { value: "#2f0f61" },
           },
           teal: {
+            100: { value: "#ccfbf1" },
             300: { value: "#5eead4" },
             400: { value: "#2dd4bf" },
             500: { value: "#14b8a6" },
             600: { value: "#0d9488" },
+            700: { value: "#0f766e" },
           },
           coral: {
             100: { value: "#ffe4e6" },

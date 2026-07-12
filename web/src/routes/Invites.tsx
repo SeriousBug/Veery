@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   Copy,
+  KeyRound,
+  LifeBuoy,
   Loader2,
   Mail,
   Plus,
@@ -81,6 +83,7 @@ export function Invites() {
   const { user: me } = useAuth();
   const [makeAdmin, setMakeAdmin] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmTarget | null>(null);
+  const [recovery, setRecovery] = useState<Invite | null>(null);
 
   const invitesQuery = useQuery({
     queryKey: ["invites"],
@@ -123,6 +126,20 @@ export function Invites() {
       toaster.create({
         type: "error",
         title: err instanceof HttpError ? err.message : "Couldn't remove that person",
+        duration: 4000,
+      }),
+  });
+
+  const resetUser = useMutation({
+    mutationFn: (id: string) => http.post<Invite>(`/api/users/${id}/reset`),
+    onSuccess: (invite) => {
+      setRecovery(invite);
+      queryClient.invalidateQueries({ queryKey: ["invites"] });
+    },
+    onError: (err) =>
+      toaster.create({
+        type: "error",
+        title: err instanceof HttpError ? err.message : "Couldn't create a recovery link",
         duration: 4000,
       }),
   });
@@ -301,6 +318,24 @@ export function Invites() {
                   {invite.isAdmin ? <ShieldCheck size={15} /> : <UserRound size={15} />}
                   {invite.isAdmin ? "Admin" : "Member"}
                 </span>
+                {invite.forUserName && (
+                  <span
+                    className={hstack({
+                      gap: "1.5",
+                      px: "3",
+                      py: "1",
+                      borderRadius: "full",
+                      bg: "teal.100",
+                      color: "teal.700",
+                      fontSize: "sm",
+                      fontWeight: "bold",
+                      flexShrink: 0,
+                    })}
+                  >
+                    <LifeBuoy size={15} />
+                    Recovery · {invite.forUserName}
+                  </span>
+                )}
                 <code
                   className={css({
                     flex: "1",
@@ -352,6 +387,71 @@ export function Invites() {
           <Users size={20} className={css({ color: "teal.500" })} />
           <h2 className={css({ fontSize: "lg", fontWeight: "extrabold" })}>People</h2>
         </div>
+
+        {recovery && (
+          <div
+            className={vstack({
+              gap: "3",
+              alignItems: "stretch",
+              p: "4",
+              borderRadius: "lg",
+              bgGradient: "to-r",
+              gradientFrom: "grape.100",
+              gradientTo: "teal.100",
+            })}
+          >
+            <div className={hstack({ gap: "2", flexWrap: "wrap" })}>
+              <LifeBuoy size={18} className={css({ color: "grape.600" })} />
+              <span className={css({ fontWeight: "extrabold", color: "ink.900" })}>
+                Recovery link for {recovery.forUserName ?? "this person"} is ready.
+              </span>
+              <span className={css({ color: "textMuted", fontSize: "sm" })}>
+                They open it to add a new passkey. Single use, expires {formatDate(recovery.expiresAt)}.
+              </span>
+            </div>
+            <div className={hstack({ gap: "3", flexWrap: "wrap" })}>
+              <code
+                className={css({
+                  flex: "1",
+                  minW: "0",
+                  px: "3",
+                  py: "2",
+                  borderRadius: "md",
+                  bg: "surface",
+                  fontSize: "sm",
+                  fontWeight: "bold",
+                  wordBreak: "break-all",
+                })}
+              >
+                {recovery.url}
+              </code>
+              <CopyButton
+                text={recovery.url}
+                copyKey="recovery"
+                copied={copied}
+                onCopy={copy}
+              />
+              <button
+                onClick={() => setRecovery(null)}
+                className={css({
+                  px: "4",
+                  py: "2",
+                  borderRadius: "full",
+                  bg: "ink.100",
+                  color: "text",
+                  fontSize: "sm",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  _hover: { bg: "ink.200" },
+                })}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+
         {usersQuery.isLoading ? (
           <Spinner />
         ) : users.length === 0 ? (
@@ -408,29 +508,54 @@ export function Invites() {
                   )}
                 </div>
                 {me?.id !== user.id && (
-                  <button
-                    onClick={() =>
-                      setConfirm({ kind: "user", id: user.id, name: user.name })
-                    }
-                    aria-label={`Remove ${user.name}`}
-                    title="Remove person"
-                    className={flex({
-                      align: "center",
-                      justify: "center",
-                      w: "9",
-                      h: "9",
-                      ml: "auto",
-                      borderRadius: "full",
-                      bg: "coral.100",
-                      color: "coral.600",
-                      cursor: "pointer",
-                      flexShrink: 0,
-                      transition: "all 0.15s ease",
-                      _hover: { bg: "coral.200" },
-                    })}
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className={hstack({ gap: "2", ml: "auto", flexShrink: 0 })}>
+                    <button
+                      onClick={() => resetUser.mutate(user.id)}
+                      disabled={resetUser.isPending}
+                      aria-label={`Reset access for ${user.name}`}
+                      title="Reset access — mint a recovery link"
+                      className={flex({
+                        align: "center",
+                        justify: "center",
+                        w: "9",
+                        h: "9",
+                        borderRadius: "full",
+                        bg: "grape.100",
+                        color: "grape.700",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                        _hover: { bg: "grape.200" },
+                        _disabled: { opacity: 0.6, cursor: "not-allowed" },
+                      })}
+                    >
+                      {resetUser.isPending && resetUser.variables === user.id ? (
+                        <Loader2 size={16} className={css({ animation: "spin 0.9s linear infinite" })} />
+                      ) : (
+                        <KeyRound size={16} />
+                      )}
+                    </button>
+                    <button
+                      onClick={() =>
+                        setConfirm({ kind: "user", id: user.id, name: user.name })
+                      }
+                      aria-label={`Remove ${user.name}`}
+                      title="Remove person"
+                      className={flex({
+                        align: "center",
+                        justify: "center",
+                        w: "9",
+                        h: "9",
+                        borderRadius: "full",
+                        bg: "coral.100",
+                        color: "coral.600",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                        _hover: { bg: "coral.200" },
+                      })}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 )}
               </div>
             ))}

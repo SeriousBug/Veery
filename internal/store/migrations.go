@@ -52,6 +52,9 @@ var migrations = []string{
 		key TEXT PRIMARY KEY,
 		value TEXT NOT NULL
 	);`,
+	// for_user binds a recovery invite to an existing user: enrolling on it adds a
+	// fresh passkey to that user rather than creating a new one.
+	`ALTER TABLE invites ADD COLUMN for_user TEXT REFERENCES users(id) ON DELETE CASCADE;`,
 }
 
 func (s *Store) migrate() error {

@@ -162,14 +162,19 @@ func scanCreds(rows *sql.Rows) ([]StoredCredential, error) {
 
 // --- Invites ---
 
-// CreateInvite stores a single-use invite.
-func (s *Store) CreateInvite(token, createdBy string, isAdmin bool, expiresAt int64) error {
+// CreateInvite stores a single-use invite. forUser binds a recovery invite to an
+// existing user; pass "" for a normal (new-user) invite.
+func (s *Store) CreateInvite(token, createdBy, forUser string, isAdmin bool, expiresAt int64) error {
 	var cb any
 	if createdBy != "" {
 		cb = createdBy
 	}
-	_, err := s.db.Exec(`INSERT INTO invites(token,created_by,is_admin,expires_at,used_at,created_at)
-		VALUES(?,?,?,?,0,?)`, token, cb, boolInt(isAdmin), expiresAt, time.Now().Unix())
+	var fu any
+	if forUser != "" {
+		fu = forUser
+	}
+	_, err := s.db.Exec(`INSERT INTO invites(token,created_by,for_user,is_admin,expires_at,used_at,created_at)
+		VALUES(?,?,?,?,?,0,?)`, token, cb, fu, boolInt(isAdmin), expiresAt, time.Now().Unix())
 	return err
 }
 
@@ -180,18 +185,21 @@ type InviteRow struct {
 	ExpiresAt int64
 	UsedAt    int64
 	CreatedAt int64
+	ForUser   string // bound target user id for recovery invites, else ""
 }
 
 // GetInvite returns an invite by token.
 func (s *Store) GetInvite(token string) (InviteRow, error) {
 	var r InviteRow
 	var admin int
-	err := s.db.QueryRow(`SELECT token,is_admin,expires_at,used_at,created_at FROM invites WHERE token=?`, token).
-		Scan(&r.Token, &admin, &r.ExpiresAt, &r.UsedAt, &r.CreatedAt)
+	var forUser sql.NullString
+	err := s.db.QueryRow(`SELECT token,is_admin,expires_at,used_at,created_at,for_user FROM invites WHERE token=?`, token).
+		Scan(&r.Token, &admin, &r.ExpiresAt, &r.UsedAt, &r.CreatedAt, &forUser)
 	if errors.Is(err, sql.ErrNoRows) {
 		return r, ErrNotFound
 	}
 	r.IsAdmin = admin != 0
+	r.ForUser = forUser.String
 	return r, err
 }
 
@@ -226,7 +234,7 @@ func (s *Store) DeleteInvite(token string) error {
 // ListPendingInvites returns unused, unexpired invites.
 func (s *Store) ListPendingInvites() ([]InviteRow, error) {
 	now := time.Now().Unix()
-	rows, err := s.db.Query(`SELECT token,is_admin,expires_at,used_at,created_at FROM invites
+	rows, err := s.db.Query(`SELECT token,is_admin,expires_at,used_at,created_at,for_user FROM invites
 		WHERE used_at=0 AND expires_at>? ORDER BY created_at DESC`, now)
 	if err != nil {
 		return nil, err
@@ -236,10 +244,12 @@ func (s *Store) ListPendingInvites() ([]InviteRow, error) {
 	for rows.Next() {
 		var r InviteRow
 		var admin int
-		if err := rows.Scan(&r.Token, &admin, &r.ExpiresAt, &r.UsedAt, &r.CreatedAt); err != nil {
+		var forUser sql.NullString
+		if err := rows.Scan(&r.Token, &admin, &r.ExpiresAt, &r.UsedAt, &r.CreatedAt, &forUser); err != nil {
 			return nil, err
 		}
 		r.IsAdmin = admin != 0
+		r.ForUser = forUser.String
 		out = append(out, r)
 	}
 	return out, rows.Err()

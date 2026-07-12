@@ -80,6 +80,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/invites/{token}", s.requireAdmin(s.handleRevokeInvite))
 	s.mux.HandleFunc("GET /api/users", s.requireAdmin(s.handleListUsers))
 	s.mux.HandleFunc("DELETE /api/users/{id}", s.requireAdmin(s.handleDeleteUser))
+	s.mux.HandleFunc("POST /api/users/{id}/reset", s.requireAdmin(s.handleResetUser))
 
 	// Stacks & containers.
 	s.mux.HandleFunc("GET /api/stacks", s.requireAuth(s.handleListStacks))

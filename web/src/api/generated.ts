@@ -43,6 +43,11 @@ export interface Invite {
   expiresAt: number /* int64 */;
   usedAt: number /* int64 */;
   url: string;
+  /**
+   * ForUserName is set on recovery invites: the display name of the existing
+   * user this link re-enrolls a passkey for. Empty on normal invites.
+   */
+  forUserName?: string;
 }
 /**
  * Container is a single managed or discovered container.

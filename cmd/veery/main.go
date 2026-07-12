@@ -45,7 +45,7 @@ func main() {
 				isAdmin = false
 			}
 		}
-		token, _, err := auth.NewInvite(st, "", isAdmin)
+		token, _, err := auth.NewInvite(st, "", "", isAdmin)
 		if err != nil {
 			log.Fatalf("mint invite: %v", err)
 		}

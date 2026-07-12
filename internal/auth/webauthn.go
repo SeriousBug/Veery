@@ -21,11 +21,12 @@ type Manager struct {
 }
 
 type ceremony struct {
-	data    *webauthn.SessionData
-	userID  string // set for registration
-	name    string
-	isAdmin bool
-	expires time.Time
+	data         *webauthn.SessionData
+	userID       string // set for registration
+	name         string
+	isAdmin      bool
+	existingUser bool // recovery invite: add a passkey to an existing user, don't create one
+	expires      time.Time
 }
 
 // Config for the relying party.
@@ -95,6 +96,11 @@ func (m *Manager) BeginRegistration(inviteToken, name string) (*protocol.Credent
 	if inv.UsedAt != 0 || inv.ExpiresAt < time.Now().Unix() {
 		return nil, "", false, ErrInvalidInvite
 	}
+	// Recovery invite bound to an existing user: enroll an additional passkey
+	// onto that user rather than creating a new one.
+	if inv.ForUser != "" {
+		return m.beginRecoveryRegistration(inv.ForUser)
+	}
 	if name == "" {
 		name = "user"
 	}
@@ -116,6 +122,42 @@ func (m *Manager) BeginRegistration(inviteToken, name string) (*protocol.Credent
 	return opts, cid, inv.IsAdmin, nil
 }
 
+// beginRecoveryRegistration starts enrollment of an additional passkey for an
+// existing user via a bound recovery invite. It reuses the user's WebAuthn id and
+// excludes their current credentials so the same authenticator isn't double-registered.
+func (m *Manager) beginRecoveryRegistration(userID string) (*protocol.CredentialCreation, string, bool, error) {
+	u, err := m.st.GetUser(userID)
+	if err != nil {
+		return nil, "", false, ErrInvalidInvite
+	}
+	creds, err := m.st.CredentialsByUser(u.ID)
+	if err != nil {
+		return nil, "", false, err
+	}
+	user := &authUser{id: []byte(u.ID), name: u.Name}
+	for _, c := range creds {
+		user.creds = append(user.creds, toWebauthnCredential(c))
+	}
+	exclusions := make([]protocol.CredentialDescriptor, 0, len(user.creds))
+	for i := range user.creds {
+		exclusions = append(exclusions, user.creds[i].Descriptor())
+	}
+	sel := protocol.AuthenticatorSelection{
+		ResidentKey:      protocol.ResidentKeyRequirementRequired,
+		UserVerification: protocol.VerificationPreferred,
+	}
+	opts, sessionData, err := m.wa.BeginRegistration(user,
+		webauthn.WithAuthenticatorSelection(sel),
+		webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementRequired),
+		webauthn.WithExclusions(exclusions),
+	)
+	if err != nil {
+		return nil, "", false, err
+	}
+	cid := m.put(&ceremony{data: sessionData, userID: u.ID, name: u.Name, isAdmin: u.IsAdmin, existingUser: true})
+	return opts, cid, u.IsAdmin, nil
+}
+
 // FinishRegistration completes enrollment: verifies the attestation, creates the
 // user, stores the credential, and consumes the invite. Returns the new user id.
 func (m *Manager) FinishRegistration(ceremonyID, inviteToken string, r *http.Request) (string, error) {
@@ -132,12 +174,16 @@ func (m *Manager) FinishRegistration(ceremonyID, inviteToken string, r *http.Req
 	if err != nil {
 		return "", err
 	}
-	// Consume the invite atomically before creating the user.
+	// Consume the invite atomically before touching the user.
 	if err := m.st.ConsumeInvite(inviteToken); err != nil {
 		return "", ErrInvalidInvite
 	}
-	if _, err := m.st.CreateUser(cer.userID, cer.name, cer.isAdmin); err != nil {
-		return "", err
+	// Recovery invites enroll onto an already-existing user; only create a user
+	// for normal invites.
+	if !cer.existingUser {
+		if _, err := m.st.CreateUser(cer.userID, cer.name, cer.isAdmin); err != nil {
+			return "", err
+		}
 	}
 	var transports []string
 	for _, t := range cred.Transport {
