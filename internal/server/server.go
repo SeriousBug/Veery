@@ -106,6 +106,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/containers/{id}/stop", s.requireAuth(s.handleContainerAction("stop")))
 	s.mux.HandleFunc("POST /api/containers/{id}/restart", s.requireAuth(s.handleContainerAction("restart")))
 	s.mux.HandleFunc("POST /api/containers/{id}/update", s.requireAuth(s.handleContainerUpdate))
+	s.mux.HandleFunc("DELETE /api/containers/{id}/managed", s.requireAuth(s.handleForgetContainer))
+	s.mux.HandleFunc("DELETE /api/stacks/{id}/managed", s.requireAuth(s.handleForgetStack))
 	s.mux.HandleFunc("POST /api/containers/autoupdate", s.requireAuth(s.handleSetAutoUpdate))
 
 	// Settings.

@@ -108,7 +108,7 @@ func (f *selfFixture) retarget(t *testing.T, image string, cmd []string) {
 	if err != nil {
 		t.Fatalf("marshal snapshot: %v", err)
 	}
-	if err := f.st.UpdateSnapshot(f.mc.ID, js); err != nil {
+	if err := f.st.UpdateSnapshot(f.mc.ID, js, f.mc.ContainerID); err != nil {
 		t.Fatalf("update snapshot: %v", err)
 	}
 	f.mc, _ = f.st.ManagedByID(f.mc.ID)

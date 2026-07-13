@@ -24,6 +24,8 @@ static Go binary with the web UI embedded (distroless/static base).
 - `internal/store/` — SQLite persistence (`accessors.go`).
 - `internal/docker/`, `internal/metrics/` — container management and host/container metrics.
   Updates are transactional and Veery updates itself via a helper container — see `docs/updates.md`.
+  Containers are the user's to create and edit (Veery only adopts them), so `reconcile.go` picks up
+  what they change behind Veery's back — see `docs/reconcile.md`.
 - `internal/notify/` — notifications via Shoutrrr service URLs (Discord, ntfy, Slack, webhooks, ...).
   Config comes from `VEERY_NOTIFY_URLS`/`VEERY_NOTIFY_EVENTS` or, unset, from the DB and the UI.
   Targets hold webhook tokens, so the routes are `requireAdmin` and URLs are redacted in logs.

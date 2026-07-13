@@ -198,7 +198,7 @@ func TestIntegrationUpdateRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal snapshot: %v", err)
 	}
-	if err := m.st.UpdateSnapshot(mc.ID, js); err != nil {
+	if err := m.st.UpdateSnapshot(mc.ID, js, mc.ContainerID); err != nil {
 		t.Fatalf("update snapshot: %v", err)
 	}
 	mc, _ = m.st.ManagedByID(mc.ID)

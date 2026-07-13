@@ -73,6 +73,13 @@ var migrations = []string{
 		started_at INTEGER NOT NULL,
 		finished_at INTEGER NOT NULL DEFAULT 0
 	);`,
+	// container_id is the container the snapshot was taken from. Docker gives a
+	// recreated container a new id, so an id that no longer matches the live
+	// container means something outside Veery (a compose file edit, a manual
+	// docker run) recreated it and the snapshot is stale. Rows written before
+	// this column existed carry an empty id and are backfilled on the first
+	// reconcile sweep.
+	`ALTER TABLE managed_containers ADD COLUMN container_id TEXT NOT NULL DEFAULT '';`,
 }
 
 func (s *Store) migrate() error {

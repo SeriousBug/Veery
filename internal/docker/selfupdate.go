@@ -95,18 +95,21 @@ func (m *Manager) ApplyUpdate(ctx context.Context, name, jobID string) error {
 	if err != nil {
 		return fmt.Errorf("not a managed container: %s", name)
 	}
-	snap, err := parseSnapshot(mc.SnapshotJSON)
+
+	oldInsp, err := m.cli.ContainerInspect(ctx, name)
+	if err != nil {
+		return fmt.Errorf("inspect %s: %w", name, err)
+	}
+
+	// The helper is the only thing touching this container, so no lock is taken;
+	// the Veery that handed off is on its way out and does nothing more to it.
+	mc, snap, err := m.refreshIfRecreated(mc, oldInsp)
 	if err != nil {
 		return err
 	}
 	ref := snap.Image
 	if ref == "" {
 		return fmt.Errorf("snapshot has no image reference")
-	}
-
-	oldInsp, err := m.cli.ContainerInspect(ctx, name)
-	if err != nil {
-		return fmt.Errorf("inspect %s: %w", name, err)
 	}
 
 	emit := func(phase, msg string) {
