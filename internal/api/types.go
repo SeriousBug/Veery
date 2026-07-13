@@ -156,6 +156,11 @@ const (
 	WSTypeMetrics WSMessageType = "metrics"
 	WSTypeStacks  WSMessageType = "stacks"
 	WSTypeJob     WSMessageType = "job"
+	// WSTypeJobs is the whole job picture, sent once when a client connects: the
+	// updates in flight plus the ones that just finished. A client that was away
+	// (or was never here) has no other way to learn about an update that started,
+	// or finished, without it.
+	WSTypeJobs WSMessageType = "jobs"
 )
 
 // WSMessage is the server→client push envelope. Exactly one payload is set.
@@ -164,6 +169,7 @@ type WSMessage struct {
 	Metrics *MetricsSnapshot `json:"metrics,omitempty"`
 	Stacks  []Stack          `json:"stacks,omitempty"`
 	Job     *JobProgress     `json:"job,omitempty"`
+	Jobs    []JobProgress    `json:"jobs,omitempty"`
 }
 
 // --- HTTP request/response bodies ---

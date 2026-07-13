@@ -57,6 +57,22 @@ var migrations = []string{
 	// for_user binds a recovery invite to an existing user: enrolling on it adds a
 	// fresh passkey to that user rather than creating a new one.
 	`ALTER TABLE invites ADD COLUMN for_user TEXT REFERENCES users(id) ON DELETE CASCADE;`,
+	// update_jobs outlives the process running the update. A self-update replaces
+	// the Veery container mid-flight, so the process that reports the outcome is
+	// never the one that started the update; a crash leaves a row unfinished for
+	// startup recovery to reconcile.
+	`CREATE TABLE update_jobs (
+		id TEXT PRIMARY KEY,
+		container_name TEXT NOT NULL,
+		image TEXT NOT NULL DEFAULT '',
+		phase TEXT NOT NULL DEFAULT '',
+		message TEXT NOT NULL DEFAULT '',
+		error TEXT NOT NULL DEFAULT '',
+		is_self INTEGER NOT NULL DEFAULT 0,
+		done INTEGER NOT NULL DEFAULT 0,
+		started_at INTEGER NOT NULL,
+		finished_at INTEGER NOT NULL DEFAULT 0
+	);`,
 }
 
 func (s *Store) migrate() error {

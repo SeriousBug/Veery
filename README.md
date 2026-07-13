@@ -14,8 +14,14 @@ so the image stays small.
 - Adopt, then manage. Veery snapshots each container's full create-spec from `docker inspect` and
   stores it. From then on it can stop, start, restart, or update a service, and recreate it from the
   snapshot if the container is removed or the host reboots.
-- Updates. Manual (pull the image, compare its digest, recreate the container if it changed) and an
-  auto-update poller.
+- Updates, transactionally. Veery pulls the image, and if the digest changed, keeps the old container
+  parked while the new one is created and health-checked. If the new one does not come up, it is
+  removed and the old container is put straight back, so a bad image cannot leave a service down. An
+  update interrupted by a crash or a reboot is reconciled the same way on the next start. Available
+  either on demand or through an auto-update poller.
+- Veery updates itself the same way. It cannot swap its own container in-process (stopping it kills
+  the process doing the swap), so it hands off to a short-lived helper container that performs the
+  update from the outside and rolls back if the new version does not come up.
 - Live metrics. Host CPU, memory, disk usage and disk read/write bandwidth, plus per-container CPU
   and memory, pushed over a WebSocket into gauges.
 - Anything unhealthy, stopped, or restart-looping shows up in a "Needs attention" band with a
@@ -81,6 +87,7 @@ they are never written to the logs.
 ```sh
 docker run -d --name veery \
   -p 8080:8080 \
+  --group-add "$(getent group docker | cut -d: -f3)" \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /proc:/host/proc:ro \
   -v /sys:/host/sys:ro \
@@ -91,6 +98,14 @@ docker run -d --name veery \
   -e HOST_SYS=/host/sys \
   ghcr.io/seriousbug/veery:latest
 ```
+
+The image runs as a nonroot user (uid 65532), which cannot open `/var/run/docker.sock` on its own —
+without `--group-add` (`group_add:` in compose) Veery starts but can manage nothing, logging
+`permission denied while trying to connect to the Docker daemon socket`. The group must be the one
+owning the socket on the host, which is why the GID is read from the host rather than hardcoded.
+
+Whatever grants that access is inherited by the helper container Veery uses to update itself, so it
+only has to be set here.
 
 Then read the first-run enrollment link from the logs and open it to register your admin passkey:
 

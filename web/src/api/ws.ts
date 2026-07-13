@@ -4,6 +4,11 @@ type Listener = (msg: WSMessage) => void;
 
 type Unsubscribe = () => void;
 
+/** Whether the push stream is currently connected. */
+export type WSStatus = "open" | "closed";
+
+type StatusListener = (status: WSStatus) => void;
+
 interface WSClientOptions {
   /** Path on the same origin, proxied to the backend in dev. */
   path?: string;
@@ -23,6 +28,7 @@ export class WSClient {
   private closedByUser = false;
   private readonly all = new Set<Listener>();
   private readonly byType = new Map<WSMessageType, Set<Listener>>();
+  private readonly statusListeners = new Set<StatusListener>();
 
   constructor(opts: WSClientOptions = {}) {
     const path = opts.path ?? "/ws";
@@ -42,6 +48,7 @@ export class WSClient {
 
     socket.onopen = () => {
       this.backoffMs = 500;
+      this.emitStatus("open");
     };
 
     socket.onmessage = (event: MessageEvent<string>) => {
@@ -56,6 +63,7 @@ export class WSClient {
 
     socket.onclose = () => {
       this.socket = null;
+      this.emitStatus("closed");
       if (this.closedByUser) return;
       const wait = this.backoffMs;
       this.backoffMs = Math.min(this.backoffMs * 2, this.maxBackoffMs);
@@ -63,6 +71,20 @@ export class WSClient {
         if (!this.closedByUser) this.open();
       }, wait);
     };
+  }
+
+  /**
+   * Observe connection state. Veery restarts its own container to update itself,
+   * which drops this stream; the UI needs to say so rather than sit there
+   * looking live.
+   */
+  onStatus(listener: StatusListener): Unsubscribe {
+    this.statusListeners.add(listener);
+    return () => this.statusListeners.delete(listener);
+  }
+
+  private emitStatus(status: WSStatus): void {
+    for (const fn of this.statusListeners) fn(status);
   }
 
   private dispatch(msg: WSMessage): void {

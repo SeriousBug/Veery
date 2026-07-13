@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -58,6 +59,17 @@ func main() {
 		return
 	}
 
+	// The helper container spawned by a self-update runs this. It performs the
+	// swap from outside the Veery container being replaced, because that swap
+	// stops the container it is replacing, and a process cannot outlive the
+	// container it is running in.
+	if len(os.Args) > 1 && os.Args[1] == "apply-update" {
+		if err := applyUpdate(st, os.Args[2:]); err != nil {
+			log.Fatalf("apply-update: %v", err)
+		}
+		return
+	}
+
 	authMgr, err := auth.NewManager(st, auth.Config{RPID: rpID, Origin: origin})
 	if err != nil {
 		log.Fatalf("auth manager: %v", err)
@@ -91,6 +103,9 @@ func main() {
 		if err := dkr.Ping(ctx); err != nil {
 			log.Printf("warning: docker daemon unreachable: %v", err)
 		}
+		// Settle anything a previous run left half-done (a crash mid-update, or
+		// the self-update that just replaced that run) before serving.
+		dkr.Recover(ctx)
 		go pollStacks(ctx, dkr, st)
 		go pollMetrics(ctx, dkr, srv.Hub(), st)
 		go dkr.AutoUpdatePoller(ctx)
@@ -116,6 +131,34 @@ func main() {
 	defer cancel()
 	httpServer.Shutdown(shutdownCtx)
 	log.Printf("shutdown complete")
+}
+
+// applyUpdate runs the swap for a container from the outside, as the detached
+// helper container started by a self-update. It has no HTTP server and no WS:
+// progress goes to the DB, which the replacement Veery reads back and reports.
+func applyUpdate(st *store.Store, args []string) error {
+	fs := flag.NewFlagSet("apply-update", flag.ExitOnError)
+	name := fs.String("container", "", "container to update")
+	jobID := fs.String("job", "", "update job id to report progress under")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *name == "" {
+		return errors.New("--container is required")
+	}
+
+	dkr, err := docker.NewManager(st, nil)
+	if err != nil {
+		return err
+	}
+	defer dkr.Close()
+	dkr.SetNotifier(notify.New(st))
+
+	// Deliberately not tied to SIGTERM: the swap must run to completion or roll
+	// back, and being interrupted halfway is what leaves a service down.
+	ctx := context.Background()
+	log.Printf("applying update to %s", *name)
+	return dkr.ApplyUpdate(ctx, *name, *jobID)
 }
 
 // pollInterval reads the configured poll interval, defaulting to 5s.

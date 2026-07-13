@@ -69,6 +69,25 @@ func (h *Hub) add(c *wsClient) {
 	}
 }
 
+// replayJobs sends the job picture to a freshly connected client: what is in
+// flight now, and what finished while it was away. Jobs are events rather than
+// state, so the hub's last-message cache cannot stand in for them. It is sent as
+// one complete set so the client can also tell what is *not* running any more,
+// and drop a spinner for an update that finished without it.
+func (s *Server) replayJobs(c *wsClient) {
+	if s.dkr == nil {
+		return
+	}
+	data, err := json.Marshal(api.WSMessage{Type: api.WSTypeJobs, Jobs: s.dkr.JobSnapshot()})
+	if err != nil {
+		return
+	}
+	select {
+	case c.send <- data:
+	default:
+	}
+}
+
 func (h *Hub) remove(c *wsClient) {
 	h.mu.Lock()
 	delete(h.clients, c)
@@ -91,6 +110,9 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	client := &wsClient{send: make(chan []byte, 32)}
 	s.hub.add(client)
 	defer s.hub.remove(client)
+	// A page loaded in the middle of an update would otherwise show nothing until
+	// the next progress message, and nothing at all if the update is stuck.
+	s.replayJobs(client)
 
 	ctx := r.Context()
 
