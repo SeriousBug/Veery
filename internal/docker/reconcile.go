@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SeriousBug/Veery/internal/api"
 	"github.com/SeriousBug/Veery/internal/store"
 	"github.com/docker/docker/api/types/container"
 )
@@ -107,6 +108,10 @@ func (m *Manager) adoptNew(ctx context.Context, c container.Summary, name string
 		return false
 	}
 	log.Printf("reconcile %s: new container in managed stack %s, now managing it", name, stackID)
+	// Veery adopts this on its own, without anyone asking it to, so it says so.
+	m.notify(api.EventContainerAdopted, "Now managing "+name,
+		"It showed up in "+stackID+", which Veery manages, so Veery is watching it too. "+
+			"Auto-update is off for it until you turn it on.")
 	return true
 }
 

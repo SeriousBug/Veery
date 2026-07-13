@@ -13,7 +13,17 @@ const EVENTS: { event: NotificationEvent; title: string; hint: string }[] = [
   {
     event: "container_status",
     title: "Service problems",
-    hint: "A service you manage crashes, goes unhealthy, disappears, stops, or comes back up.",
+    hint: "A service you manage crashes, goes unhealthy, stops, or comes back up.",
+  },
+  {
+    event: "container_missing",
+    title: "Services removed",
+    hint: "A container you manage is removed from this machine. Usually that's you, taking it down or editing your compose file — turn this off if you change things often.",
+  },
+  {
+    event: "container_adopted",
+    title: "New services picked up",
+    hint: "A container appears in a service Veery already manages, so Veery starts watching it too.",
   },
   {
     event: "update_applied",

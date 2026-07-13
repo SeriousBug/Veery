@@ -59,6 +59,20 @@ tombstone, so `compose down` (bring it back) and `up -d --remove-orphans` (it is
 indistinguishable, and guessing wrong means discarding the snapshot bring-up needs. The user says
 which: **Bring back up**, or **Forget it** (`DELETE /api/containers/{id}/managed`).
 
+## Notifications
+
+Reconcile touches things without being asked, so it says so, on events the user can turn off
+independently (`internal/api/types.go`, toggled in Settings):
+
+- `container_adopted` — Veery started managing a container that appeared in a managed stack.
+- `container_missing` — a managed container was removed. Split out of `container_status` because on
+  a host whose compose files change often it is the noisiest event and usually reports the user's
+  own work back to them. A stack that goes *whole* is one message ("blog was taken down"), not one
+  per container.
+- `container_status` — crashes, unhealthy, stopped, recovered. What is actually going wrong.
+
+## Removal, continued
+
 What Veery *can* tell apart is a stopped container from a removed one — a stopped container still
 exists, so a reboot or a crash-loop never reads as missing. And a stack whose containers are *all*
 missing was taken down whole, which is a thing users do on purpose, so it reports as missing rather
