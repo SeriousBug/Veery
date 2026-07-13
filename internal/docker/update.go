@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -75,7 +76,7 @@ func (m *Manager) doUpdate(ctx context.Context, mc store.ManagedContainer, emit 
 	}
 	oldImageID := oldInsp.Image
 
-	emit("pulling", "Pulling "+ref)
+	emit("pulling", "Downloading "+ref)
 	// Anonymous pull. Private registries would need per-registry credentials
 	// pulled from settings and passed via image.PullOptions.RegistryAuth;
 	// out of scope for now.
@@ -109,14 +110,14 @@ func (m *Manager) doUpdate(ctx context.Context, mc store.ManagedContainer, emit 
 		_ = m.cli.ContainerStop(ctx, oldInsp.ID, container.StopOptions{})
 	}
 
-	emit("recreating", "Recreating "+name)
+	emit("recreating", "Installing the new image")
 	newID, err := m.recreate(ctx, snap, ref)
 	if err != nil {
 		m.rollback(ctx, newID, oldInsp.ID, name, emit)
 		return false, fmt.Errorf("update failed, rolled back: recreate on new image: %w", err)
 	}
 
-	emit("verifying", "Verifying "+name)
+	emit("verifying", "Restarting and waiting for it to come up")
 	if verr := m.verifyHealthy(ctx, newID); verr != nil {
 		m.rollback(ctx, newID, oldInsp.ID, name, emit)
 		return false, fmt.Errorf("update failed, rolled back: %w", verr)
@@ -198,17 +199,44 @@ func (m *Manager) verifyHealthy(ctx context.Context, id string) error {
 	}
 }
 
-// drainPull consumes the pull progress stream, surfacing status lines.
+// pullInterval is the minimum gap between progress messages while pulling. The
+// daemon emits a status event per layer several times a second; without this
+// every one of them would become a WS broadcast.
+const pullInterval = 300 * time.Millisecond
+
+// layerProgress is the download/extract state of a single image layer, tracked
+// so the whole pull can be reported as one figure instead of per-layer noise.
+type layerProgress struct {
+	status     string
+	downloaded int64
+	size       int64
+}
+
+// drainPull consumes the pull progress stream, aggregating the per-layer events
+// into an overall "Downloading 45.2 MB / 120 MB" then "Extracting 3 / 5 layers".
 func drainPull(rc io.ReadCloser, emit func(phase, msg string)) error {
 	defer rc.Close()
 	dec := json.NewDecoder(rc)
+	layers := map[string]*layerProgress{}
+	// pending holds the newest message the throttle has held back, so the final
+	// state of the pull is always reported even if it lands inside the window.
+	var pending, emitted string
+	var lastAt time.Time
 	for {
 		var ev struct {
-			Status string `json:"status"`
-			Error  string `json:"error"`
+			ID       string `json:"id"`
+			Status   string `json:"status"`
+			Error    string `json:"error"`
+			Progress struct {
+				Current int64 `json:"current"`
+				Total   int64 `json:"total"`
+			} `json:"progressDetail"`
 		}
 		if err := dec.Decode(&ev); err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
+				if pending != "" {
+					emit("pulling", pending)
+				}
 				return nil
 			}
 			return err
@@ -216,10 +244,77 @@ func drainPull(rc io.ReadCloser, emit func(phase, msg string)) error {
 		if ev.Error != "" {
 			return fmt.Errorf("pull: %s", ev.Error)
 		}
-		if ev.Status != "" {
-			emit("pulling", ev.Status)
+		// Events with no id are stream-level lines ("Pulling from library/nginx")
+		// and carry no progress.
+		if ev.ID == "" {
+			continue
+		}
+
+		l := layers[ev.ID]
+		if l == nil {
+			l = &layerProgress{}
+			layers[ev.ID] = l
+		}
+		l.status = ev.Status
+		switch ev.Status {
+		case "Downloading":
+			// progressDetail is reused by the extract phase, so only trust its
+			// byte counts while the layer is actually downloading.
+			l.downloaded = ev.Progress.Current
+			if ev.Progress.Total > 0 {
+				l.size = ev.Progress.Total
+			}
+		case "Download complete", "Already exists", "Pull complete":
+			l.downloaded = l.size
+		}
+
+		msg := pullMessage(layers)
+		if msg == "" || msg == emitted {
+			continue
+		}
+		pending = msg
+		if time.Since(lastAt) < pullInterval {
+			continue
+		}
+		emit("pulling", msg)
+		pending, emitted, lastAt = "", msg, time.Now()
+	}
+}
+
+// pullMessage renders the aggregate state of every layer seen so far. Layers
+// download and extract concurrently, so bytes take priority: extraction is only
+// reported once everything with a known size has arrived.
+func pullMessage(layers map[string]*layerProgress) string {
+	var downloaded, size int64
+	var complete int
+	for _, l := range layers {
+		downloaded += l.downloaded
+		size += l.size
+		if l.status == "Pull complete" || l.status == "Already exists" {
+			complete++
 		}
 	}
+	switch {
+	case size > 0 && downloaded < size:
+		return fmt.Sprintf("Downloading %s / %s", formatBytes(downloaded), formatBytes(size))
+	case complete < len(layers):
+		return fmt.Sprintf("Extracting %d / %d layers", complete, len(layers))
+	default:
+		return ""
+	}
+}
+
+func formatBytes(n int64) string {
+	const unit = 1000
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for v := n / unit; v >= unit && exp < 3; v /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "kMGT"[exp])
 }
 
 func shortID(id string) string {

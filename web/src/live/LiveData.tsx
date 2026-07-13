@@ -27,18 +27,21 @@ interface LiveDataValue {
 const LiveDataContext = createContext<LiveDataValue | null>(null);
 
 const LOADING_VERB: Record<string, string> = {
-  start: "Starting up…",
-  stop: "Stopping…",
-  restart: "Restarting…",
-  update: "Installing update…",
-  pull: "Downloading update…",
-  bringup: "Bringing it back up…",
-  recreate: "Recreating…",
-  adopt: "Taking over management…",
+  start: "Starting up",
+  stop: "Stopping",
+  restart: "Restarting",
+  update: "Updating",
+  pull: "Downloading update for",
+  bringup: "Bringing back up",
+  recreate: "Recreating",
+  adopt: "Taking over management of",
 };
 
-function loadingTitle(job: JobProgress): string {
-  return LOADING_VERB[job.kind] ?? "Working on it…";
+function loadingTitle(job: JobProgress, name: string | null): string {
+  const verb = LOADING_VERB[job.kind];
+  const who = name ?? job.target;
+  if (!verb) return who ? `Working on ${who}…` : "Working on it…";
+  return who ? `${verb} ${who}…` : `${verb}…`;
 }
 
 /** Resolve a friendly display name for a job target (stack or container id/name). */
@@ -126,9 +129,10 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
         return next;
       });
 
+      const name = targetName(stacksRef.current, job.target);
       const description = job.message || undefined;
       if (!job.done) {
-        const opts = { title: loadingTitle(job), description, type: "loading" };
+        const opts = { title: loadingTitle(job, name), description, type: "loading" };
         if (seenToasts.current.has(job.id)) {
           toaster.update(job.id, opts);
         } else {

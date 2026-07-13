@@ -50,10 +50,16 @@ export function ToasterView() {
           <div className={vstack({ gap: "0.5", alignItems: "stretch", flex: "1", minW: "0" })}>
             <Toast.Title
               className={css({ fontWeight: "extrabold", fontSize: "sm", color: "text" })}
-            />
-            <Toast.Description
-              className={css({ fontSize: "sm", color: "textMuted", wordBreak: "break-word" })}
-            />
+            >
+              {toast.title}
+            </Toast.Title>
+            {toast.description ? (
+              <Toast.Description
+                className={css({ fontSize: "sm", color: "textMuted", wordBreak: "break-word" })}
+              >
+                {toast.description}
+              </Toast.Description>
+            ) : null}
           </div>
           <Toast.CloseTrigger
             aria-label="Dismiss"
