@@ -203,7 +203,7 @@ func TestIntegrationUpdateRollback(t *testing.T) {
 	}
 	mc, _ = m.st.ManagedByID(mc.ID)
 
-	_, err = m.doUpdate(ctx, mc, func(phase, msg string) {})
+	_, err = m.doUpdate(ctx, mc, genID(), func(phase, msg string) {})
 	if err == nil {
 		t.Fatalf("expected update to fail and roll back, got nil error")
 	}

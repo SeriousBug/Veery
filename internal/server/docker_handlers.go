@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -42,24 +43,24 @@ func (s *Server) handleAdoptStack(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// handleStackAction runs a job-wrapped stack lifecycle action. Progress is
-// pushed over the WS; the HTTP call returns once the action completes.
+// handleStackAction runs a job-wrapped stack lifecycle action. The action runs
+// detached and reports over the WS; the HTTP call returns immediately.
 func (s *Server) handleStackAction(action string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !s.dockerReady(w) {
 			return
 		}
 		id := r.PathValue("id")
-		ctx := r.Context()
+		ctx := detached(r)
 		switch action {
 		case "start":
-			s.dkr.StartStackJob(ctx, id)
+			go s.dkr.StartStackJob(ctx, id)
 		case "stop":
-			s.dkr.StopStackJob(ctx, id)
+			go s.dkr.StopStackJob(ctx, id)
 		case "restart":
-			s.dkr.RestartStackJob(ctx, id)
+			go s.dkr.RestartStackJob(ctx, id)
 		case "bringup":
-			s.dkr.BringUpStackJob(ctx, id)
+			go s.dkr.BringUpStackJob(ctx, id)
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	}
@@ -71,14 +72,14 @@ func (s *Server) handleContainerAction(action string) http.HandlerFunc {
 			return
 		}
 		id := r.PathValue("id")
-		ctx := r.Context()
+		ctx := detached(r)
 		switch action {
 		case "start":
-			s.dkr.StartJob(ctx, id)
+			go s.dkr.StartJob(ctx, id)
 		case "stop":
-			s.dkr.StopJob(ctx, id)
+			go s.dkr.StopJob(ctx, id)
 		case "restart":
-			s.dkr.RestartJob(ctx, id)
+			go s.dkr.RestartJob(ctx, id)
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	}
@@ -89,8 +90,16 @@ func (s *Server) handleContainerUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	s.dkr.Update(r.Context(), id)
+	go s.dkr.Update(detached(r), id)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// detached derives a context that outlives the request. A pull and health-check
+// can run for minutes, and an update aborted halfway because someone closed a
+// tab is exactly the state that leaves a service down. Progress reaches the UI
+// over the WS, not this response.
+func detached(r *http.Request) context.Context {
+	return context.WithoutCancel(r.Context())
 }
 
 func (s *Server) handleSetAutoUpdate(w http.ResponseWriter, r *http.Request) {

@@ -172,6 +172,13 @@ export const WSTypeMetrics: WSMessageType = "metrics";
 export const WSTypeStacks: WSMessageType = "stacks";
 export const WSTypeJob: WSMessageType = "job";
 /**
+ * WSTypeJobs is the whole job picture, sent once when a client connects: the
+ * updates in flight plus the ones that just finished. A client that was away
+ * (or was never here) has no other way to learn about an update that started,
+ * or finished, without it.
+ */
+export const WSTypeJobs: WSMessageType = "jobs";
+/**
  * WSMessage is the server→client push envelope. Exactly one payload is set.
  */
 export interface WSMessage {
@@ -179,6 +186,7 @@ export interface WSMessage {
   metrics?: MetricsSnapshot;
   stacks?: Stack[];
   job?: JobProgress;
+  jobs?: JobProgress[];
 }
 /**
  * SessionInfo is returned by /auth/me for the current session.

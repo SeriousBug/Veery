@@ -26,19 +26,25 @@ interface LiveDataValue {
 
 const LiveDataContext = createContext<LiveDataValue | null>(null);
 
+const OFFLINE_TOAST = "ws-offline";
+const OFFLINE_GRACE_MS = 2500;
+
 const LOADING_VERB: Record<string, string> = {
-  start: "Starting up…",
-  stop: "Stopping…",
-  restart: "Restarting…",
-  update: "Installing update…",
-  pull: "Downloading update…",
-  bringup: "Bringing it back up…",
-  recreate: "Recreating…",
-  adopt: "Taking over management…",
+  start: "Starting up",
+  stop: "Stopping",
+  restart: "Restarting",
+  update: "Updating",
+  pull: "Downloading update for",
+  bringup: "Bringing back up",
+  recreate: "Recreating",
+  adopt: "Taking over management of",
 };
 
-function loadingTitle(job: JobProgress): string {
-  return LOADING_VERB[job.kind] ?? "Working on it…";
+function loadingTitle(job: JobProgress, name: string | null): string {
+  const verb = LOADING_VERB[job.kind];
+  const who = name ?? job.target;
+  if (!verb) return who ? `Working on ${who}…` : "Working on it…";
+  return who ? `${verb} ${who}…` : `${verb}…`;
 }
 
 /** Resolve a friendly display name for a job target (stack or container id/name). */
@@ -86,6 +92,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    let offlineTimer = 0;
 
     http
       .get<Stack[]>("/api/stacks")
@@ -111,12 +118,53 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
       if (msg.job) handleJob(msg.job);
     };
 
+    // The full job picture, sent when the connection opens. It is the only way a
+    // page loaded mid-update learns an update is running, and the only way a page
+    // that was disconnected (because Veery was restarting itself) learns how the
+    // update it was watching turned out.
+    const onJobs = (msg: WSMessage) => {
+      const jobs = msg.jobs ?? [];
+      for (const job of jobs) handleJob(job);
+
+      // Anything we are still showing a spinner for, that the server does not
+      // know about, is finished and gone. Without this it spins forever.
+      const known = new Set(jobs.map((j) => j.id));
+      for (const id of seenToasts.current) {
+        if (!known.has(id)) toaster.remove(id);
+      }
+      seenToasts.current = new Set(known);
+    };
+
     const unsubs = [
       wsClient.subscribe("stacks", onStacks),
       wsClient.subscribe("metrics", onMetrics),
       wsClient.subscribe("job", onJob),
+      wsClient.subscribe("jobs", onJobs),
+      wsClient.onStatus(handleStatus),
     ];
     wsClient.connect();
+
+    // Veery restarts its own container to update itself, so losing the stream is
+    // an expected part of an update rather than an error. Say that, instead of
+    // leaving the page looking live but frozen. Held back briefly so an ordinary
+    // blip doesn't flash a scary message.
+    function handleStatus(status: "open" | "closed") {
+      if (status === "open") {
+        window.clearTimeout(offlineTimer);
+        toaster.remove(OFFLINE_TOAST);
+        return;
+      }
+      window.clearTimeout(offlineTimer);
+      offlineTimer = window.setTimeout(() => {
+        toaster.create({
+          id: OFFLINE_TOAST,
+          type: "loading",
+          title: "Reconnecting to Veery…",
+          description: "It may be restarting to finish an update.",
+          duration: Number.POSITIVE_INFINITY,
+        });
+      }, OFFLINE_GRACE_MS);
+    }
 
     function handleJob(job: JobProgress) {
       setJobs((prev) => {
@@ -126,9 +174,10 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
         return next;
       });
 
+      const name = targetName(stacksRef.current, job.target);
       const description = job.message || undefined;
       if (!job.done) {
-        const opts = { title: loadingTitle(job), description, type: "loading" };
+        const opts = { title: loadingTitle(job, name), description, type: "loading" };
         if (seenToasts.current.has(job.id)) {
           toaster.update(job.id, opts);
         } else {
@@ -160,6 +209,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(offlineTimer);
       for (const off of unsubs) off();
       wsClient.close();
     };

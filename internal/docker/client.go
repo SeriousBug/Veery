@@ -44,6 +44,17 @@ type Manager struct {
 	// concurrently.
 	locksMu sync.Mutex
 	locks   map[string]*sync.Mutex
+
+	// jobsMu guards activeJobs, the jobs currently in flight. A client that
+	// connects while one is running is replayed them, so a page load in the
+	// middle of an update still shows its progress.
+	jobsMu     sync.Mutex
+	activeJobs map[string]api.JobProgress
+
+	// selfID is the container Veery itself runs in, resolved on first use. It is
+	// empty when Veery runs on the host rather than in a container.
+	selfOnce sync.Once
+	selfID   string
 }
 
 // NewManager builds a Docker Manager from the ambient environment
@@ -60,6 +71,7 @@ func NewManager(st *store.Store, pub Publisher) (*Manager, error) {
 		updateAvail: map[string]bool{},
 		lastStatus:  map[string]api.ContainerStatus{},
 		locks:       map[string]*sync.Mutex{},
+		activeJobs:  map[string]api.JobProgress{},
 	}, nil
 }
 

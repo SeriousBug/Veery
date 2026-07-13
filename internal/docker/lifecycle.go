@@ -52,7 +52,16 @@ func (m *Manager) ListStacks(ctx context.Context) ([]api.Stack, error) {
 	}
 
 	for _, c := range summaries {
+		// The self-update helper is Veery's own scaffolding, not a service.
+		if c.Labels[updaterLabel] == updaterRole {
+			continue
+		}
 		name := containerName(c.Names)
+		// A container parked mid-swap is the previous instance of a service that
+		// is still listed under its real name; showing both would be a phantom.
+		if strings.HasSuffix(name, oldSuffix) {
+			continue
+		}
 		live[name] = true
 		proj := c.Labels[projectLabel]
 		mc, isManaged := managedByName[name]
