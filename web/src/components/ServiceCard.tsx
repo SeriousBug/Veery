@@ -4,7 +4,7 @@ import { css } from "styled-system/css";
 import { hstack, vstack } from "styled-system/patterns";
 import { StatusPill } from "./StatusPill";
 import { ActionBar } from "./ActionBar";
-import { stackAction, containerAction } from "../lib/actions";
+import { stackAction, containerAction, forgetStack } from "../lib/actions";
 import type { JobProgress, Stack } from "../api/generated";
 
 export function stackBusy(
@@ -119,6 +119,7 @@ export function ServiceCard({
               if (c.updateAvailable) void containerAction(c.containerName, "update");
             }
           },
+          onForget: () => forgetStack(stack.id, stack.name),
         }}
       />
     </div>

@@ -57,12 +57,12 @@ const MAP: Record<string, StatusMeta> = {
     strong: "grape.700",
   },
   missing: {
-    label: "Missing",
+    label: "Removed",
     icon: CloudOff,
-    tone: "attention",
-    dot: "coral.500",
-    soft: "coral.300",
-    strong: "coral.600",
+    tone: "idle",
+    dot: "ink.400",
+    soft: "ink.100",
+    strong: "ink.600",
   },
 };
 
@@ -79,8 +79,15 @@ export function statusMeta(status: ContainerStatus): StatusMeta {
   );
 }
 
+/**
+ * A whole service being gone is a service the user took down themselves (a
+ * `compose down` removes the containers), so it is not a problem to shout
+ * about — the backend only reports a stack as missing when every part of it is.
+ * A part missing from a service that is otherwise up comes back as
+ * needs_attention instead.
+ */
 export function needsAttention(status: ContainerStatus): boolean {
-  return status === "needs_attention" || status === "missing";
+  return status === "needs_attention";
 }
 
 /**

@@ -10,10 +10,12 @@ import (
 
 type fakeNotifier struct {
 	titles []string
+	events []api.NotificationEvent
 }
 
 func (f *fakeNotifier) Notify(ev api.NotificationEvent, title, body string) {
 	f.titles = append(f.titles, title)
+	f.events = append(f.events, ev)
 }
 
 // stacksOf builds a one-stack snapshot from container name/status pairs.
@@ -99,8 +101,57 @@ func TestNoteStatusesSurvivesRestart(t *testing.T) {
 	}
 
 	restarted.noteStatuses(stacksOf(managed("nginx", api.StatusMissing)))
-	if len(f.titles) != 1 || f.titles[0] != "nginx has gone missing" {
+	if len(f.titles) != 1 || f.titles[0] != "nginx was removed" {
 		t.Fatalf("titles = %v, want the missing container reported after the restart", f.titles)
+	}
+}
+
+// Taking a whole service down is one thing the user did, so it is one message.
+// Reporting every container of it separately is the noise this collapses.
+func TestNoteStatusesCollapsesAWholeStackRemoval(t *testing.T) {
+	st := openTestStore(t)
+	m, f := newTestManager(t, st)
+
+	m.noteStatuses(stacksOf(managed("web-app", api.StatusRunning), managed("web-db", api.StatusRunning)))
+	m.noteStatuses(stacksOf(managed("web-app", api.StatusMissing), managed("web-db", api.StatusMissing)))
+
+	if len(f.titles) != 1 || f.titles[0] != "web was taken down" {
+		t.Fatalf("titles = %v, want one message for the whole stack", f.titles)
+	}
+	if f.events[0] != api.EventContainerMissing {
+		t.Fatalf("event = %q, want it reported as a removal so it can be turned off on its own", f.events[0])
+	}
+}
+
+// One container gone from a service whose other parts are still there is not
+// something the user did to the service as a whole, so it is named.
+func TestNoteStatusesNamesASingleRemoval(t *testing.T) {
+	st := openTestStore(t)
+	m, f := newTestManager(t, st)
+
+	m.noteStatuses(stacksOf(managed("web-app", api.StatusRunning), managed("web-db", api.StatusRunning)))
+	m.noteStatuses(stacksOf(managed("web-app", api.StatusRunning), managed("web-db", api.StatusMissing)))
+
+	if len(f.titles) != 1 || f.titles[0] != "web-db was removed" {
+		t.Fatalf("titles = %v, want the one removed container named", f.titles)
+	}
+	if f.events[0] != api.EventContainerMissing {
+		t.Fatalf("event = %q, want a removal event", f.events[0])
+	}
+}
+
+// A crash and a removal are different problems: one is the container failing,
+// the other is the user editing their compose file. They are separate events so
+// the noisy one can be silenced without silencing the one that matters.
+func TestNoteStatusesSeparatesCrashesFromRemovals(t *testing.T) {
+	st := openTestStore(t)
+	m, f := newTestManager(t, st)
+
+	m.noteStatuses(stacksOf(managed("web-app", api.StatusRunning)))
+	m.noteStatuses(stacksOf(managed("web-app", api.StatusNeedsAttention)))
+
+	if len(f.events) != 1 || f.events[0] != api.EventContainerStatus {
+		t.Fatalf("events = %v, want a crash reported as a status change", f.events)
 	}
 }
 

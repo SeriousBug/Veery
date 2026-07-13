@@ -251,9 +251,21 @@ export const EventUpdateApplied: NotificationEvent = "update_applied";
 export const EventUpdateAvailable: NotificationEvent = "update_available";
 /**
  * EventContainerStatus fires when a managed container changes status, e.g.
- * starts crash-looping, goes unhealthy, disappears, or recovers.
+ * starts crash-looping, goes unhealthy, stops, or recovers.
  */
 export const EventContainerStatus: NotificationEvent = "container_status";
+/**
+ * EventContainerMissing fires when a managed container is removed from the
+ * host. It is separate from EventContainerStatus because removing one is
+ * usually the user's own doing (a compose file edit, a compose down), so it
+ * is the event most worth turning off on a host that changes often.
+ */
+export const EventContainerMissing: NotificationEvent = "container_missing";
+/**
+ * EventContainerAdopted fires when Veery takes over a container that
+ * appeared in a stack it already manages, which it does on its own.
+ */
+export const EventContainerAdopted: NotificationEvent = "container_adopted";
 /**
  * EventAuth fires on passkey enrollment, logins and other account changes.
  */

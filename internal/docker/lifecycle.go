@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -52,16 +53,10 @@ func (m *Manager) ListStacks(ctx context.Context) ([]api.Stack, error) {
 	}
 
 	for _, c := range summaries {
-		// The self-update helper is Veery's own scaffolding, not a service.
-		if c.Labels[updaterLabel] == updaterRole {
+		if !isService(c) {
 			continue
 		}
 		name := containerName(c.Names)
-		// A container parked mid-swap is the previous instance of a service that
-		// is still listed under its real name; showing both would be a phantom.
-		if strings.HasSuffix(name, oldSuffix) {
-			continue
-		}
 		live[name] = true
 		proj := c.Labels[projectLabel]
 		mc, isManaged := managedByName[name]
@@ -190,14 +185,16 @@ func mapStatus(state, health string, exitCode int) api.ContainerStatus {
 func finalizeStack(st *api.Stack) {
 	sort.Slice(st.Containers, func(i, j int) bool { return st.Containers[i].Name < st.Containers[j].Name })
 	anyManaged := false
-	needsAttention, updating, running, total := false, false, 0, len(st.Containers)
+	needsAttention, updating, running, missing, total := false, false, 0, 0, len(st.Containers)
 	for _, c := range st.Containers {
 		if c.Managed {
 			anyManaged = true
 		}
 		switch c.Status {
-		case api.StatusNeedsAttention, api.StatusMissing:
+		case api.StatusNeedsAttention:
 			needsAttention = true
+		case api.StatusMissing:
+			missing++
 		case api.StatusUpdating:
 			updating = true
 		case api.StatusRunning:
@@ -206,7 +203,13 @@ func finalizeStack(st *api.Stack) {
 	}
 	st.Managed = anyManaged
 	switch {
-	case needsAttention:
+	// Every container gone is a service that was taken down whole (a compose
+	// down), which is a thing the user did on purpose and can undo with bring
+	// up. Only a container missing from a service whose other parts are still
+	// running is a surprise worth flagging.
+	case total > 0 && missing == total:
+		st.Status = api.StatusMissing
+	case needsAttention || missing > 0:
 		st.Status = api.StatusNeedsAttention
 	case updating:
 		st.Status = api.StatusUpdating
@@ -258,6 +261,7 @@ func (m *Manager) Adopt(ctx context.Context, stackID string) error {
 			StackID:       stack.ID,
 			ContainerName: name,
 			SnapshotJSON:  js,
+			ContainerID:   insp.ID,
 			CreatedAt:     time.Now().Unix(),
 		}); err != nil {
 			return err
@@ -306,8 +310,13 @@ func (m *Manager) BringUpStack(ctx context.Context, stackID string) error {
 			if perr != nil {
 				return perr
 			}
-			if _, rerr := m.recreate(ctx, snap, ""); rerr != nil {
+			newID, rerr := m.recreate(ctx, snap, "")
+			if rerr != nil {
 				return fmt.Errorf("recreate %s: %w", mc.ContainerName, rerr)
+			}
+			// The spec is unchanged, but it now lives in a different container.
+			if uerr := m.st.UpdateSnapshot(mc.ID, mc.SnapshotJSON, newID); uerr != nil {
+				log.Printf("bringup %s: record new container: %v", mc.ContainerName, uerr)
 			}
 			continue
 		}

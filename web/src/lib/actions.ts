@@ -42,6 +42,39 @@ export function containerAction(
   return fire(`/api/containers/${enc(id)}/${action}`, "That didn't work");
 }
 
+/**
+ * Stop managing a container or a whole service. The container is already gone
+ * from the host, so there is no job to follow: the stacks push that follows
+ * makes it disappear, and the toast says why.
+ */
+async function forget(path: string, name: string): Promise<boolean> {
+  try {
+    await http.del(path);
+    toaster.create({
+      type: "success",
+      title: `Veery is no longer tracking ${name}`,
+    });
+    return true;
+  } catch (err) {
+    const message =
+      err instanceof HttpError ? err.message : "Could not reach the server.";
+    toaster.create({
+      type: "error",
+      title: "Could not forget it",
+      description: message,
+    });
+    return false;
+  }
+}
+
+export function forgetContainer(id: string, name: string): Promise<boolean> {
+  return forget(`/api/containers/${enc(id)}/managed`, name);
+}
+
+export function forgetStack(id: string, name: string): Promise<boolean> {
+  return forget(`/api/stacks/${enc(id)}/managed`, name);
+}
+
 export async function setAutoUpdate(
   containerId: string,
   autoUpdate: boolean,

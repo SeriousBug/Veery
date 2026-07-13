@@ -43,6 +43,42 @@ func (s *Server) handleAdoptStack(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// handleForgetContainer drops a container Veery manages but that no longer
+// exists on the host, which is what removing a service from a compose file
+// leaves behind. Nothing is deleted on the host; there is nothing left to
+// delete. Veery stops tracking it, so it stops being reported as missing and
+// bring-up stops recreating it.
+func (s *Server) handleForgetContainer(w http.ResponseWriter, r *http.Request) {
+	if !s.dockerReady(w) {
+		return
+	}
+	mc, err := s.store.ResolveManaged(r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "container not managed")
+		return
+	}
+	if err := s.store.DeleteManagedContainer(mc.ID); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.dkr.BroadcastStacks(r.Context())
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// handleForgetStack stops managing a whole stack. Its containers, if any are
+// still on the host, keep running: this drops Veery's records, not the service.
+func (s *Server) handleForgetStack(w http.ResponseWriter, r *http.Request) {
+	if !s.dockerReady(w) {
+		return
+	}
+	if err := s.store.Unadopt(r.PathValue("id")); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.dkr.BroadcastStacks(r.Context())
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 // handleStackAction runs a job-wrapped stack lifecycle action. The action runs
 // detached and reports over the WS; the HTTP call returns immediately.
 func (s *Server) handleStackAction(action string) http.HandlerFunc {

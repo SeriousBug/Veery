@@ -7,6 +7,7 @@ import {
   LifeBuoy,
   Loader2,
   CheckCircle2,
+  Trash2,
 } from "lucide-react";
 import { css, cx } from "styled-system/css";
 import { hstack } from "styled-system/patterns";
@@ -47,6 +48,8 @@ export interface ActionHandlers {
   onRestart: () => void;
   onUpdate: () => void;
   onBringUp: () => void;
+  /** Stop tracking something that has been removed from the host for good. */
+  onForget?: () => void;
 }
 
 export function ActionBar({
@@ -72,6 +75,7 @@ export function ActionBar({
 }) {
   const [confirmStop, setConfirmStop] = useState(false);
   const [confirmUpdate, setConfirmUpdate] = useState(false);
+  const [confirmForget, setConfirmForget] = useState(false);
 
   if (busy) {
     return (
@@ -101,6 +105,17 @@ export function ActionBar({
         <LifeBuoy size={16} /> Bring back up
       </button>,
     );
+    if (handlers.onForget) {
+      buttons.push(
+        <button
+          key="forget"
+          className={btn("secondary", size)}
+          onClick={() => setConfirmForget(true)}
+        >
+          <Trash2 size={16} /> Forget it
+        </button>,
+      );
+    }
   } else if (status === "running") {
     buttons.push(
       <button key="restart" className={btn("primary", size)} onClick={handlers.onRestart}>
@@ -197,6 +212,15 @@ export function ActionBar({
         confirmLabel="Update now"
         cancelLabel="Not now"
         onConfirm={handlers.onUpdate}
+      />
+      <ConfirmDialog
+        open={confirmForget}
+        onOpenChange={setConfirmForget}
+        title={`Forget ${name}?`}
+        description={`${name} no longer exists on this machine, so there is nothing to delete. Veery will stop watching for it and will no longer offer to bring it back. Do this if you removed it on purpose.`}
+        confirmLabel="Yes, forget it"
+        tone="danger"
+        onConfirm={() => handlers.onForget?.()}
       />
     </>
   );

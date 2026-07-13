@@ -43,6 +43,12 @@ func (m *Manager) runAutoUpdates(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
+		// A container that no longer exists has nothing to update, and failing
+		// on it every interval would notify the user about it every interval.
+		// It shows as missing in the UI, which is where they deal with it.
+		if _, err := m.cli.ContainerInspect(ctx, mc.ContainerName); err != nil {
+			continue
+		}
 		log.Printf("auto-update: checking %s", mc.ContainerName)
 		m.Update(ctx, mc.ID)
 	}

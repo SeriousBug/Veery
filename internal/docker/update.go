@@ -80,19 +80,22 @@ func (m *Manager) doUpdate(ctx context.Context, mc store.ManagedContainer, jobID
 	lock.Lock()
 	defer lock.Unlock()
 
-	snap, err := parseSnapshot(mc.SnapshotJSON)
+	name := mc.ContainerName
+	oldInsp, err := m.cli.ContainerInspect(ctx, name)
+	if err != nil {
+		return false, fmt.Errorf("inspect %s: %w", name, err)
+	}
+
+	// The user may have recreated the container with a new spec, or a new image
+	// tag, since it was last recorded. Updating from the stale snapshot would
+	// undo that change and pull the image they moved away from.
+	mc, snap, err := m.refreshIfRecreated(mc, oldInsp)
 	if err != nil {
 		return false, err
 	}
 	ref := snap.Image
 	if ref == "" {
 		return false, fmt.Errorf("snapshot has no image reference")
-	}
-	name := mc.ContainerName
-
-	oldInsp, err := m.cli.ContainerInspect(ctx, name)
-	if err != nil {
-		return false, fmt.Errorf("inspect %s: %w", name, err)
 	}
 
 	newImg, err := m.pullImage(ctx, ref, emit)
@@ -184,9 +187,8 @@ func (m *Manager) swap(
 	// prune the old image and clear the update flag.
 	_ = m.cli.ContainerRemove(ctx, oldInsp.ID, container.RemoveOptions{Force: true})
 	if insp, ierr := m.cli.ContainerInspect(ctx, newID); ierr == nil {
-		fresh := snapshotFromInspect(insp)
-		if js, merr := fresh.marshal(); merr == nil {
-			_ = m.st.UpdateSnapshot(mc.ID, js)
+		if _, rerr := m.recordSpec(mc, insp); rerr != nil {
+			log.Printf("update %s: record new spec: %v", name, rerr)
 		}
 	}
 	// Ignore "in use" errors: the old image may still back other containers, and

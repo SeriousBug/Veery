@@ -104,8 +104,10 @@ func main() {
 			log.Printf("warning: docker daemon unreachable: %v", err)
 		}
 		// Settle anything a previous run left half-done (a crash mid-update, or
-		// the self-update that just replaced that run) before serving.
+		// the self-update that just replaced that run) before serving, then pick
+		// up whatever the user changed on the host while it was down.
 		dkr.Recover(ctx)
+		dkr.Reconcile(ctx)
 		go pollStacks(ctx, dkr, st)
 		go pollMetrics(ctx, dkr, srv.Hub(), st)
 		go dkr.AutoUpdatePoller(ctx)
@@ -171,7 +173,8 @@ func pollInterval(st *store.Store) time.Duration {
 }
 
 // pollStacks pushes a fresh stacks list over the WS on an interval so status
-// transitions reach connected clients.
+// transitions reach connected clients, reconciling first so what it pushes
+// accounts for containers the user has added, removed or recreated by hand.
 func pollStacks(ctx context.Context, dkr *docker.Manager, st *store.Store) {
 	dkr.BroadcastStacks(ctx)
 	for {
@@ -181,6 +184,7 @@ func pollStacks(ctx context.Context, dkr *docker.Manager, st *store.Store) {
 			t.Stop()
 			return
 		case <-t.C:
+			dkr.Reconcile(ctx)
 			dkr.BroadcastStacks(ctx)
 		}
 	}

@@ -8,7 +8,12 @@ import { Gauge } from "../components/Gauge";
 import { ActionBar } from "../components/ActionBar";
 import { AutoUpdateToggle } from "../components/AutoUpdateToggle";
 import { stackBusy } from "../components/ServiceCard";
-import { stackAction, containerAction } from "../lib/actions";
+import {
+  stackAction,
+  containerAction,
+  forgetContainer,
+  forgetStack,
+} from "../lib/actions";
 import { formatBytes, formatPercent, formatUsage, ratioPct, formatAge } from "../lib/format";
 import type { Container, ContainerMetrics, JobProgress } from "../api/generated";
 
@@ -93,6 +98,7 @@ export function ServiceDetail({ id }: { id: string }) {
                 if (c.updateAvailable) void containerAction(c.containerName, "update");
               }
             },
+            onForget: () => forgetStack(stack.id, stack.name),
           }}
         />
       </div>
@@ -105,6 +111,7 @@ export function ServiceDetail({ id }: { id: string }) {
           <ContainerPanel
             key={c.id}
             container={c}
+            stackId={stack.id}
             metrics={metricsById.get(c.id)}
             busy={jobs.get(c.id)}
           />
@@ -134,10 +141,12 @@ function BackLink() {
 
 function ContainerPanel({
   container,
+  stackId,
   metrics,
   busy,
 }: {
   container: Container;
+  stackId: string;
   metrics: ContainerMetrics | undefined;
   busy: JobProgress | undefined;
 }) {
@@ -191,8 +200,11 @@ function ContainerPanel({
           onStart: () => containerAction(container.id, "start"),
           onStop: () => containerAction(container.id, "stop"),
           onRestart: () => containerAction(container.id, "restart"),
-          onBringUp: () => containerAction(container.id, "start"),
+          // A container that no longer exists cannot be started, only built
+          // again from its snapshot, which is what bringing the stack up does.
+          onBringUp: () => stackAction(stackId, "bringup"),
           onUpdate: () => containerAction(container.containerName, "update"),
+          onForget: () => forgetContainer(container.containerName, container.name),
         }}
       />
 
