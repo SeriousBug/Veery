@@ -14,6 +14,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { LiveDataProvider } from "../live/LiveData";
 import { MobileNav } from "./MobileNav";
 import { ToasterView } from "./ToasterView";
+import { ConnectionLight } from "./ConnectionLight";
 
 const baseNavItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
@@ -61,34 +62,37 @@ export function AppShell({ children }: { children: ReactNode }) {
           zIndex: "10",
         })}
       >
-        <Link to="/" className={hstack({ gap: "2.5", textDecoration: "none" })}>
-          <span
-            className={flex({
-              align: "center",
-              justify: "center",
-              w: "10",
-              h: "10",
-              borderRadius: "lg",
-              bgGradient: "to-br",
-              gradientFrom: "grape.400",
-              gradientTo: "teal.400",
-              color: "white",
-              boxShadow: "pop",
-            })}
-          >
-            <Boxes size={22} strokeWidth={2.4} />
-          </span>
-          <span
-            className={css({
-              fontSize: "xl",
-              fontWeight: "extrabold",
-              letterSpacing: "-0.02em",
-              color: "text",
-            })}
-          >
-            Veery
-          </span>
-        </Link>
+        <div className={hstack({ gap: "2.5" })}>
+          <Link to="/" className={hstack({ gap: "2.5", textDecoration: "none" })}>
+            <span
+              className={flex({
+                align: "center",
+                justify: "center",
+                w: "10",
+                h: "10",
+                borderRadius: "lg",
+                bgGradient: "to-br",
+                gradientFrom: "grape.400",
+                gradientTo: "teal.400",
+                color: "white",
+                boxShadow: "pop",
+              })}
+            >
+              <Boxes size={22} strokeWidth={2.4} />
+            </span>
+            <span
+              className={css({
+                fontSize: "xl",
+                fontWeight: "extrabold",
+                letterSpacing: "-0.02em",
+                color: "text",
+              })}
+            >
+              Veery
+            </span>
+          </Link>
+          <ConnectionLight />
+        </div>
 
         <MobileNav
           navItems={navItems}

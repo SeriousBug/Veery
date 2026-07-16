@@ -16,12 +16,16 @@ import type {
   WSMessage,
 } from "../api/generated";
 
+/** Push-stream connection state, surfaced so the header can show a live light. */
+export type ConnectionState = "connecting" | "open" | "closed";
+
 interface LiveDataValue {
   stacks: Stack[];
   metrics: MetricsSnapshot | null;
   /** Latest in-flight job per target id (stack or container). */
   jobs: Map<string, JobProgress>;
   loading: boolean;
+  connection: ConnectionState;
 }
 
 const LiveDataContext = createContext<LiveDataValue | null>(null);
@@ -83,6 +87,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
   const [metrics, setMetrics] = useState<MetricsSnapshot | null>(null);
   const [jobs, setJobs] = useState<Map<string, JobProgress>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [connection, setConnection] = useState<ConnectionState>("connecting");
   const seenToasts = useRef<Set<string>>(new Set());
   const stacksRef = useRef<Stack[]>([]);
 
@@ -149,6 +154,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
     // leaving the page looking live but frozen. Held back briefly so an ordinary
     // blip doesn't flash a scary message.
     function handleStatus(status: "open" | "closed") {
+      setConnection(status);
       if (status === "open") {
         window.clearTimeout(offlineTimer);
         toaster.remove(OFFLINE_TOAST);
@@ -215,7 +221,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const value: LiveDataValue = { stacks, metrics, jobs, loading };
+  const value: LiveDataValue = { stacks, metrics, jobs, loading, connection };
   return <LiveDataContext value={value}>{children}</LiveDataContext>;
 }
 
