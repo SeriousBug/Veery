@@ -4,8 +4,13 @@ type Listener = (msg: WSMessage) => void;
 
 type Unsubscribe = () => void;
 
-/** Whether the push stream is currently connected. */
-export type WSStatus = "open" | "closed";
+/**
+ * Push-stream connection state. "connecting" covers the initial dial and every
+ * reconnect attempt; "closed" is only reported once reconnects have clearly
+ * failed (the backoff has reached its ceiling), so a brief blip breathes amber
+ * rather than flashing the red down state.
+ */
+export type WSStatus = "open" | "connecting" | "closed";
 
 type StatusListener = (status: WSStatus) => void;
 
@@ -63,8 +68,13 @@ export class WSClient {
 
     socket.onclose = () => {
       this.socket = null;
-      this.emitStatus("closed");
-      if (this.closedByUser) return;
+      if (this.closedByUser) {
+        this.emitStatus("closed");
+        return;
+      }
+      // Once the backoff has climbed to its ceiling the retries have plainly
+      // failed: report "closed". Before then we are still actively reconnecting.
+      this.emitStatus(this.backoffMs >= this.maxBackoffMs ? "closed" : "connecting");
       const wait = this.backoffMs;
       this.backoffMs = Math.min(this.backoffMs * 2, this.maxBackoffMs);
       setTimeout(() => {

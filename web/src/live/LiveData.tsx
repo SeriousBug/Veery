@@ -153,7 +153,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
     // an expected part of an update rather than an error. Say that, instead of
     // leaving the page looking live but frozen. Held back briefly so an ordinary
     // blip doesn't flash a scary message.
-    function handleStatus(status: "open" | "closed") {
+    function handleStatus(status: ConnectionState) {
       setConnection(status);
       if (status === "open") {
         window.clearTimeout(offlineTimer);
