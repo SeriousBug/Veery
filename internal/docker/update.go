@@ -173,14 +173,13 @@ func (m *Manager) swap(
 	emit("recreating", "Installing the new image")
 	newID, err := m.recreate(ctx, snap, ref)
 	if err != nil {
-		m.rollback(ctx, newID, oldInsp.ID, name, emit)
-		return fmt.Errorf("update failed, rolled back: recreate on new image: %w", err)
+		return rolledBack(m.rollback(ctx, newID, oldInsp.ID, name, emit), name,
+			fmt.Errorf("recreate on new image: %w", err))
 	}
 
 	emit("verifying", "Restarting and waiting for it to come up")
 	if verr := m.verifyHealthy(ctx, newID); verr != nil {
-		m.rollback(ctx, newID, oldInsp.ID, name, emit)
-		return fmt.Errorf("update failed, rolled back: %w", verr)
+		return rolledBack(m.rollback(ctx, newID, oldInsp.ID, name, emit), name, verr)
 	}
 
 	// Success: drop the parked old container, refresh the snapshot, best-effort
@@ -202,16 +201,34 @@ func (m *Manager) swap(
 
 // rollback restores the parked old container after a failed update: the new
 // container (if any) is removed, the old one renamed back to its original name
-// and started. Nothing is pruned and the stored snapshot is left untouched.
-func (m *Manager) rollback(ctx context.Context, newID, oldID, name string, emit func(phase, msg string)) {
+// and started. Nothing is pruned and the stored snapshot is left untouched. It
+// returns an error only when the old container could not be brought back up, so
+// the caller can tell "rolled back cleanly" from "the service is now down".
+func (m *Manager) rollback(ctx context.Context, newID, oldID, name string, emit func(phase, msg string)) error {
 	emit("rollback", "Update failed, rolling back "+name)
 	if newID != "" {
 		_ = m.cli.ContainerRemove(ctx, newID, container.RemoveOptions{Force: true})
 	}
 	if err := m.cli.ContainerRename(ctx, oldID, name); err != nil {
 		emit("rollback", "restore rename failed: "+err.Error())
+		return fmt.Errorf("restore name: %w", err)
 	}
-	_ = m.cli.ContainerStart(ctx, oldID, container.StartOptions{})
+	if err := m.cli.ContainerStart(ctx, oldID, container.StartOptions{}); err != nil {
+		emit("rollback", "restart failed: "+err.Error())
+		return fmt.Errorf("restart %s: %w", name, err)
+	}
+	return nil
+}
+
+// rolledBack composes the error an update returns after a rollback. When the
+// rollback restored the old container, the update failed but the service is
+// back (cause). When it could not, the service is down and that is the more
+// urgent fact, so it leads.
+func rolledBack(rbErr error, name string, cause error) error {
+	if rbErr != nil {
+		return fmt.Errorf("update failed and %s is down: rollback could not restart it (%v); update error: %w", name, rbErr, cause)
+	}
+	return fmt.Errorf("update failed, rolled back: %w", cause)
 }
 
 // verifyHealthy polls a freshly created container for up to verifyTimeout,
