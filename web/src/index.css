@@ -5,3 +5,47 @@
     transform: rotate(360deg);
   }
 }
+
+/* Reconnecting: breathe between a bright and a darker amber, glow swelling on
+   the bright phase. Stays amber throughout so it never reads as the red down
+   state. */
+@keyframes conn-amber-breathe {
+  0%,
+  100% {
+    background: var(--colors-sunshine-400);
+    box-shadow:
+      0 0 5px 1px color-mix(in srgb, var(--colors-sunshine-400) 65%, transparent),
+      0 0 12px 3px color-mix(in srgb, var(--colors-sunshine-400) 38%, transparent);
+  }
+  50% {
+    background: var(--colors-sunshine-500);
+    box-shadow:
+      0 0 3px 0 color-mix(in srgb, var(--colors-sunshine-500) 45%, transparent),
+      0 0 6px 1px color-mix(in srgb, var(--colors-sunshine-500) 22%, transparent);
+  }
+}
+
+.conn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+/* Connected: steady, calm — a static halo, no motion on a healthy page. */
+.conn-dot--open {
+  background: var(--colors-mint-500);
+  box-shadow:
+    0 0 4px 0 color-mix(in srgb, var(--colors-mint-500) 55%, transparent),
+    0 0 8px 2px color-mix(in srgb, var(--colors-mint-500) 28%, transparent);
+}
+.conn-dot--connecting {
+  animation: conn-amber-breathe 2.8s ease-in-out infinite;
+}
+/* Disconnected: still glows so it stands out, but does not animate — the retry
+   has given up, there is nothing in progress to signal. */
+.conn-dot--closed {
+  background: var(--colors-coral-500);
+  box-shadow:
+    0 0 4px 0 color-mix(in srgb, var(--colors-coral-500) 60%, transparent),
+    0 0 9px 2px color-mix(in srgb, var(--colors-coral-500) 32%, transparent);
+}

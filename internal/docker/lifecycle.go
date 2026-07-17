@@ -41,6 +41,7 @@ func (m *Manager) ListStacks(ctx context.Context) ([]api.Stack, error) {
 		managedByName[mc.ContainerName] = mc
 	}
 
+	updating := m.updatingContainers()
 	stacks := map[string]*api.Stack{}
 	live := map[string]bool{}
 	getStack := func(id string) *api.Stack {
@@ -71,6 +72,9 @@ func (m *Manager) ListStacks(ctx context.Context) ([]api.Stack, error) {
 		cont := buildContainer(c, name, isManaged, mc)
 		if isManaged {
 			cont.UpdateAvailable = m.updateAvailableFor(name)
+			if updating[name] {
+				cont.Status = api.StatusUpdating
+			}
 		}
 		// RestartCount is only interesting for troubled containers, so inspect
 		// (one extra call) just for those rather than for every container.
@@ -88,12 +92,19 @@ func (m *Manager) ListStacks(ctx context.Context) ([]api.Stack, error) {
 			continue
 		}
 		st := getStack(mc.StackID)
+		// A container parked under its suffixed name mid-swap has no live entry
+		// under its own name, so it reads as missing. While its update is in
+		// flight that is expected, not a removal.
+		status, state := api.StatusMissing, "missing"
+		if updating[mc.ContainerName] {
+			status, state = api.StatusUpdating, "updating"
+		}
 		st.Containers = append(st.Containers, api.Container{
 			ID:            mc.ID,
 			Name:          mc.ContainerName,
 			ContainerName: mc.ContainerName,
-			Status:        api.StatusMissing,
-			State:         "missing",
+			Status:        status,
+			State:         state,
 			Managed:       true,
 			AutoUpdate:    mc.AutoUpdate,
 		})

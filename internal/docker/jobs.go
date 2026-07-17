@@ -69,6 +69,22 @@ func (m *Manager) ActiveJobs() []api.JobProgress {
 	return out
 }
 
+// updatingContainers returns the set of managed container names with an update
+// job in flight. During a swap the container is deliberately parked, stopped
+// and recreated, so for that window its raw Docker state (missing, stopped, or
+// still starting) must read as "updating" rather than as trouble.
+func (m *Manager) updatingContainers() map[string]bool {
+	m.jobsMu.Lock()
+	defer m.jobsMu.Unlock()
+	names := map[string]bool{}
+	for _, j := range m.activeJobs {
+		if j.Kind == "update" {
+			names[j.Target] = true
+		}
+	}
+	return names
+}
+
 // recentWindow is how far back a finished update stays interesting to a client
 // that just connected. It only has to cover the gap a Veery restart leaves.
 const recentWindow = 5 * time.Minute

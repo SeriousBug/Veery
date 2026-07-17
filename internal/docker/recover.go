@@ -106,7 +106,9 @@ func (m *Manager) reconcileOne(ctx context.Context, orig string, parked, fresh c
 		// completed update would have.
 		if err := m.verifyHealthy(ctx, fresh.ID); err != nil {
 			log.Printf("recover %s: replacement is unhealthy (%v), rolling back", orig, err)
-			m.rollback(ctx, fresh.ID, parked.ID, orig, func(string, string) {})
+			if rbErr := m.rollback(ctx, fresh.ID, parked.ID, orig, func(string, string) {}); rbErr != nil {
+				log.Printf("recover %s: rollback could not restart the old container: %v", orig, rbErr)
+			}
 			return nil
 		}
 		log.Printf("recover %s: replacement is healthy, removing parked container", orig)
