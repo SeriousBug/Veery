@@ -1,11 +1,13 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Sparkles, Layers } from "lucide-react";
+import { ChevronRight, Sparkles, Layers, Box, Cpu, MemoryStick } from "lucide-react";
 import { css } from "styled-system/css";
-import { hstack, vstack } from "styled-system/patterns";
+import { grid, hstack, vstack } from "styled-system/patterns";
 import { StatusPill } from "./StatusPill";
+import { Gauge } from "./Gauge";
 import { ActionBar } from "./ActionBar";
-import { stackAction, containerAction, forgetStack } from "../lib/actions";
-import type { JobProgress, Stack } from "../api/generated";
+import { stackAction, containerAction, forgetStack, forgetContainer } from "../lib/actions";
+import { formatBytes, formatPercent, formatUsage, ratioPct } from "../lib/format";
+import type { Container, ContainerMetrics, JobProgress, Stack } from "../api/generated";
 
 export function stackBusy(
   stack: Stack,
@@ -23,9 +25,11 @@ export function stackBusy(
 export function ServiceCard({
   stack,
   jobs,
+  metricsById,
 }: {
   stack: Stack;
   jobs: Map<string, JobProgress>;
+  metricsById: Map<string, ContainerMetrics>;
 }) {
   const updateAvailable = stack.containers.some((c) => c.updateAvailable);
   const busy = stackBusy(stack, jobs);
@@ -36,7 +40,7 @@ export function ServiceCard({
   return (
     <div
       className={vstack({
-        gap: "4",
+        gap: "5",
         alignItems: "stretch",
         p: "5",
         borderRadius: "lg",
@@ -80,7 +84,7 @@ export function ServiceCard({
       <div className={hstack({ gap: "3", color: "textMuted", fontSize: "sm", fontWeight: "medium" })}>
         <span className={hstack({ gap: "1.5" })}>
           <Layers size={15} />
-          {count === 1 ? "1 service" : `${count} services`}
+          {count === 1 ? "1 container" : `${count} containers`}
         </span>
         {updateAvailable && (
           <span
@@ -120,6 +124,124 @@ export function ServiceCard({
             }
           },
           onForget: () => forgetStack(stack.id, stack.name),
+        }}
+      />
+
+      <div className={vstack({ gap: "3", alignItems: "stretch" })}>
+        <span
+          className={css({
+            fontSize: "xs",
+            fontWeight: "extrabold",
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+            color: "textMuted",
+          })}
+        >
+          {count === 1 ? "Container" : "Containers"}
+        </span>
+        {stack.containers.map((c) => (
+          <ContainerRow
+            key={c.id}
+            container={c}
+            stackId={stack.id}
+            metrics={metricsById.get(c.id)}
+            busy={jobs.get(c.id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ContainerRow({
+  container,
+  stackId,
+  metrics,
+  busy,
+}: {
+  container: Container;
+  stackId: string;
+  metrics: ContainerMetrics | undefined;
+  busy: JobProgress | undefined;
+}) {
+  const memPct = metrics && metrics.memLimit > 0 ? ratioPct(metrics.memUsed, metrics.memLimit) : 0;
+  const memValue = metrics
+    ? metrics.memLimit > 0
+      ? formatUsage(metrics.memUsed, metrics.memLimit)
+      : formatBytes(metrics.memUsed)
+    : "—";
+
+  return (
+    <div
+      className={vstack({
+        gap: "3",
+        alignItems: "stretch",
+        p: "4",
+        borderRadius: "md",
+        bg: "bg",
+        borderWidth: "1px",
+        borderColor: "border",
+      })}
+    >
+      <div className={hstack({ justify: "space-between", gap: "3", alignItems: "flex-start" })}>
+        <span className={hstack({ gap: "2", minW: "0" })}>
+          <Box size={16} className={css({ color: "grape.500", flexShrink: 0 })} />
+          <span className={vstack({ gap: "0.5", alignItems: "flex-start", minW: "0" })}>
+            <span
+              className={css({
+                fontWeight: "extrabold",
+                fontSize: "sm",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                maxW: "full",
+              })}
+            >
+              {container.name}
+            </span>
+            <span
+              className={css({
+                fontSize: "xs",
+                color: "textMuted",
+                fontFamily: "monospace",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                maxW: "full",
+              })}
+            >
+              {container.image}
+            </span>
+          </span>
+        </span>
+        <StatusPill status={container.status} size="sm" />
+      </div>
+
+      <div className={grid({ columns: 2, gap: "4" })}>
+        <Gauge
+          label="CPU"
+          value={metrics ? formatPercent(metrics.cpuPercent) : "—"}
+          pct={metrics?.cpuPercent ?? 0}
+          icon={<Cpu size={14} />}
+        />
+        <Gauge label="Memory" value={memValue} pct={memPct} icon={<MemoryStick size={14} />} />
+      </div>
+
+      <ActionBar
+        name={container.name}
+        status={container.status}
+        busy={busy}
+        updateAvailable={container.updateAvailable}
+        showUpdate={container.managed}
+        updateImage={container.image}
+        size="sm"
+        handlers={{
+          onStart: () => containerAction(container.id, "start"),
+          onStop: () => containerAction(container.id, "stop"),
+          onRestart: () => containerAction(container.id, "restart"),
+          onBringUp: () => stackAction(stackId, "bringup"),
+          onUpdate: () => containerAction(container.containerName, "update"),
+          onForget: () => forgetContainer(container.containerName, container.name),
         }}
       />
     </div>
