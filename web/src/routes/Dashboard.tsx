@@ -7,10 +7,14 @@ import { MdadmHealth } from "../components/MdadmHealth";
 import { AttentionBand } from "../components/AttentionBand";
 import { ServiceCard } from "../components/ServiceCard";
 import { DiscoveredStacks } from "../components/DiscoveredStacks";
+import type { ContainerMetrics } from "../api/generated";
 
 export function Dashboard() {
-  const { stacks, jobs, loading } = useLiveData();
+  const { stacks, metrics, jobs, loading } = useLiveData();
   const managed = stacks.filter((s) => s.managed);
+  const metricsById = new Map<string, ContainerMetrics>(
+    (metrics?.containers ?? []).map((m) => [m.id, m]),
+  );
 
   return (
     <div className={vstack({ gap: "8", alignItems: "stretch" })}>
@@ -49,9 +53,14 @@ export function Dashboard() {
                 Nothing set up yet — add one of the services found below.
               </p>
             ) : (
-              <div className={grid({ columns: { base: 1, sm: 2, lg: 3 }, gap: "4" })}>
+              <div className={grid({ columns: { base: 1, lg: 2 }, gap: "5" })}>
                 {managed.map((stack) => (
-                  <ServiceCard key={stack.id} stack={stack} jobs={jobs} />
+                  <ServiceCard
+                    key={stack.id}
+                    stack={stack}
+                    jobs={jobs}
+                    metricsById={metricsById}
+                  />
                 ))}
               </div>
             )}
@@ -66,15 +75,15 @@ export function Dashboard() {
 
 function SkeletonGrid() {
   return (
-    <div className={grid({ columns: { base: 1, sm: 2, lg: 3 }, gap: "4" })}>
-      {[0, 1, 2].map((i) => (
+    <div className={grid({ columns: { base: 1, lg: 2 }, gap: "5" })}>
+      {[0, 1].map((i) => (
         <div
           key={i}
           className={flex({
             direction: "column",
             gap: "2",
             p: "5",
-            h: "36",
+            h: "72",
             borderRadius: "lg",
             bg: "surface",
             borderWidth: "1px",
