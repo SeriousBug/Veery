@@ -3,6 +3,7 @@ import { css } from "styled-system/css";
 import { flex, grid, hstack, vstack } from "styled-system/patterns";
 import { useLiveData } from "../live/LiveData";
 import { HostResources } from "../components/HostResources";
+import { MdadmHealth } from "../components/MdadmHealth";
 import { AttentionBand } from "../components/AttentionBand";
 import { ServiceCard } from "../components/ServiceCard";
 import { DiscoveredStacks } from "../components/DiscoveredStacks";
@@ -29,6 +30,8 @@ export function Dashboard() {
       </div>
 
       <HostResources />
+
+      <MdadmHealth />
 
       {loading ? (
         <SkeletonGrid />

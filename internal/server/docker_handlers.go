@@ -192,6 +192,16 @@ func (s *Server) handleListDisks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
+// handleStartMdadmScan starts a data-scrub (check) on a RAID array. The
+// refreshed status arrives on the next WS metrics tick, so there is no body.
+func (s *Server) handleStartMdadmScan(w http.ResponseWriter, r *http.Request) {
+	if err := metrics.StartMdadmCheck(r.PathValue("name")); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 func (s *Server) handleSetDiskVisibility(w http.ResponseWriter, r *http.Request) {
 	var req api.SetDiskVisibilityRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

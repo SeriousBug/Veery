@@ -134,6 +134,50 @@ export interface HostMetrics {
   memTotal: number /* uint64 */;
   disks: DiskUsage[];
   diskActivity: DiskActivity[];
+  /**
+   * Mdadm carries Linux software RAID array health. Nil/empty when the host
+   * has no md arrays or /proc and /sys aren't mounted in; the UI hides the
+   * panel then.
+   */
+  mdadm: MdArray[];
+}
+/**
+ * MdArrayState is the health rollup for a Linux software RAID (mdadm) array.
+ */
+export type MdArrayState = string;
+export const MdHealthy: MdArrayState = "healthy";
+export const MdDegraded: MdArrayState = "degraded";
+export const MdRecovering: MdArrayState = "recovering"; // resync/recover/reshape/check in progress
+export const MdFailed: MdArrayState = "failed";
+/**
+ * MdSyncAction is the array's current sync operation, mirroring the sysfs
+ * sync_action value.
+ */
+export type MdSyncAction = string; // "idle" | "check" | "resync" | "recover" | "reshape"
+/**
+ * MdArray is one Linux software RAID array's health, read from /proc/mdstat and
+ * sysfs. Empty on hosts without RAID (or without /proc and /sys mounted in), so
+ * the UI hides the panel.
+ */
+export interface MdArray {
+  name: string; // md0
+  level: string; // raid1
+  state: MdArrayState;
+  devicesTotal: number /* int */;
+  devicesUp: number /* int */;
+  members: MdMember[];
+  syncAction: MdSyncAction; // idle when no scan running
+  syncPercent: number /* float64 */; // 0 when idle
+  syncSpeedKBs: number /* uint64 */; // 0 when idle
+  syncFinish: string; // e.g. "189.2min", "" when idle
+  mismatchCnt: number /* uint64 */;
+}
+/**
+ * MdMember is one member device of an array and whether it is up.
+ */
+export interface MdMember {
+  device: string; // sdb1
+  up: boolean;
 }
 /**
  * ContainerMetrics is a snapshot of one container's resource use.

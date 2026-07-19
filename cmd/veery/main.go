@@ -218,6 +218,7 @@ func pollMetrics(ctx context.Context, dkr *docker.Manager, hub *server.Hub, st *
 			log.Printf("metrics: load disk visibility: %v", err)
 		}
 		host := metrics.BuildHostMetrics(sample, vis, peaks)
+		host.Mdadm = metrics.ScanMdadm()
 		containers, err := dkr.ContainerStats(ctx)
 		if err != nil {
 			log.Printf("metrics: container stats: %v", err)

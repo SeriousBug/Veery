@@ -98,7 +98,7 @@ type DiskActivity struct {
 type DiskKind string
 
 const (
-	DiskCapacity DiskKind = "capacity"
+	DiskCapacity     DiskKind = "capacity"
 	DiskActivityKind DiskKind = "activity"
 )
 
@@ -121,6 +121,47 @@ type HostMetrics struct {
 	MemTotal     uint64         `json:"memTotal"`
 	Disks        []DiskUsage    `json:"disks"`
 	DiskActivity []DiskActivity `json:"diskActivity"`
+	// Mdadm carries Linux software RAID array health. Nil/empty when the host
+	// has no md arrays or /proc and /sys aren't mounted in; the UI hides the
+	// panel then.
+	Mdadm []MdArray `json:"mdadm"`
+}
+
+// MdArrayState is the health rollup for a Linux software RAID (mdadm) array.
+type MdArrayState string
+
+const (
+	MdHealthy    MdArrayState = "healthy"
+	MdDegraded   MdArrayState = "degraded"
+	MdRecovering MdArrayState = "recovering" // resync/recover/reshape/check in progress
+	MdFailed     MdArrayState = "failed"
+)
+
+// MdSyncAction is the array's current sync operation, mirroring the sysfs
+// sync_action value.
+type MdSyncAction string // "idle" | "check" | "resync" | "recover" | "reshape"
+
+// MdArray is one Linux software RAID array's health, read from /proc/mdstat and
+// sysfs. Empty on hosts without RAID (or without /proc and /sys mounted in), so
+// the UI hides the panel.
+type MdArray struct {
+	Name         string       `json:"name"`  // md0
+	Level        string       `json:"level"` // raid1
+	State        MdArrayState `json:"state"`
+	DevicesTotal int          `json:"devicesTotal"`
+	DevicesUp    int          `json:"devicesUp"`
+	Members      []MdMember   `json:"members"`
+	SyncAction   MdSyncAction `json:"syncAction"`   // idle when no scan running
+	SyncPercent  float64      `json:"syncPercent"`  // 0 when idle
+	SyncSpeedKBs uint64       `json:"syncSpeedKBs"` // 0 when idle
+	SyncFinish   string       `json:"syncFinish"`   // e.g. "189.2min", "" when idle
+	MismatchCnt  uint64       `json:"mismatchCnt"`
+}
+
+// MdMember is one member device of an array and whether it is up.
+type MdMember struct {
+	Device string `json:"device"` // sdb1
+	Up     bool   `json:"up"`
 }
 
 // ContainerMetrics is a snapshot of one container's resource use.
@@ -176,7 +217,7 @@ type WSMessage struct {
 
 // SessionInfo is returned by /auth/me for the current session.
 type SessionInfo struct {
-	User        User  `json:"user"`
+	User        User         `json:"user"`
 	Credentials []Credential `json:"credentials"`
 }
 
@@ -204,9 +245,9 @@ type SetAutoUpdateRequest struct {
 
 // Settings are the mutable app settings.
 type Settings struct {
-	PollIntervalSeconds int  `json:"pollIntervalSeconds"`
-	AutoUpdateDefault   bool `json:"autoUpdateDefault"`
-	AutoUpdateIntervalMinutes int `json:"autoUpdateIntervalMinutes"`
+	PollIntervalSeconds       int  `json:"pollIntervalSeconds"`
+	AutoUpdateDefault         bool `json:"autoUpdateDefault"`
+	AutoUpdateIntervalMinutes int  `json:"autoUpdateIntervalMinutes"`
 	// DiskVisibility overrides the default shown/hidden state per disk key. Keys
 	// absent here fall back to the built-in heuristic. Applies to all users.
 	DiskVisibility map[string]bool `json:"diskVisibility"`
