@@ -156,6 +156,25 @@ type MdArray struct {
 	SyncSpeedKBs uint64       `json:"syncSpeedKBs"` // 0 when idle
 	SyncFinish   string       `json:"syncFinish"`   // e.g. "189.2min", "" when idle
 	MismatchCnt  uint64       `json:"mismatchCnt"`
+	// LastScanAt is the Unix time (seconds) of the last data-scrub Veery saw
+	// finish on this array. The kernel keeps no such timestamp, so Veery records
+	// it when it observes a check return to idle. 0 means unknown (none seen yet).
+	LastScanAt int64 `json:"lastScanAt"`
+}
+
+// MdadmSchedule is a per-array automatic data-scrub schedule.
+type MdadmSchedule struct {
+	// RRule is an iCal RRULE (RFC 5545) describing when to scrub, e.g.
+	// "FREQ=WEEKLY;BYDAY=SU;BYHOUR=20;BYMINUTE=0" for Sundays at 8PM. It is
+	// evaluated in the server's local timezone (set TZ to control it).
+	RRule string `json:"rrule"`
+	// Enabled gates the schedule without discarding the rule.
+	Enabled bool `json:"enabled"`
+}
+
+// MdadmScheduleConfig maps a RAID array name (e.g. "md0") to its scrub schedule.
+type MdadmScheduleConfig struct {
+	Schedules map[string]MdadmSchedule `json:"schedules"`
 }
 
 // MdMember is one member device of an array and whether it is up.
@@ -277,6 +296,19 @@ const (
 	EventContainerAdopted NotificationEvent = "container_adopted"
 	// EventAuth fires on passkey enrollment, logins and other account changes.
 	EventAuth NotificationEvent = "auth"
+	// EventRaidScanStarted fires when a data-scrub (check) begins on a RAID
+	// array, whoever started it — Veery's scheduler, a host cron, or a manual
+	// mdadm command — since it is detected as a state transition.
+	EventRaidScanStarted NotificationEvent = "raid_scan_started"
+	// EventRaidScanFinished fires when a data-scrub finishes and the array
+	// returns to idle.
+	EventRaidScanFinished NotificationEvent = "raid_scan_finished"
+	// EventRaidUnhealthy fires when a RAID array goes degraded or failed, and
+	// again when it recovers to healthy.
+	EventRaidUnhealthy NotificationEvent = "raid_unhealthy"
+	// EventRaidDiskOffline fires when a member disk of a RAID array drops out,
+	// and again when it comes back.
+	EventRaidDiskOffline NotificationEvent = "raid_disk_offline"
 )
 
 // AllNotificationEvents lists every event in display order.
@@ -287,6 +319,10 @@ var AllNotificationEvents = []NotificationEvent{
 	EventUpdateApplied,
 	EventUpdateAvailable,
 	EventAuth,
+	EventRaidUnhealthy,
+	EventRaidDiskOffline,
+	EventRaidScanStarted,
+	EventRaidScanFinished,
 }
 
 // NotificationConfig is where notifications go and which events are sent.

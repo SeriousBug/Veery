@@ -7,6 +7,7 @@ import (
 
 	"github.com/SeriousBug/Veery/internal/api"
 	"github.com/SeriousBug/Veery/internal/metrics"
+	"github.com/SeriousBug/Veery/internal/raidwatch"
 )
 
 // dockerReady guards handlers that need the Docker manager, returning 503 when
@@ -200,6 +201,43 @@ func (s *Server) handleStartMdadmScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// handleGetMdadmSchedules returns the per-array automatic scrub schedules.
+func (s *Server) handleGetMdadmSchedules(w http.ResponseWriter, r *http.Request) {
+	cfg, err := s.store.LoadMdadmSchedules()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+// handleSetMdadmSchedules validates each RRULE and saves the schedules. Empty
+// rules are dropped so an array without a schedule stays absent from the map.
+func (s *Server) handleSetMdadmSchedules(w http.ResponseWriter, r *http.Request) {
+	var cfg api.MdadmScheduleConfig
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad request")
+		return
+	}
+	clean := map[string]api.MdadmSchedule{}
+	for name, sc := range cfg.Schedules {
+		if sc.RRule == "" {
+			continue
+		}
+		if err := raidwatch.ValidateRRule(sc.RRule); err != nil {
+			writeErr(w, http.StatusBadRequest, name+": invalid schedule: "+err.Error())
+			return
+		}
+		clean[name] = sc
+	}
+	cfg.Schedules = clean
+	if err := s.store.SaveMdadmSchedules(cfg); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg)
 }
 
 func (s *Server) handleSetDiskVisibility(w http.ResponseWriter, r *http.Request) {

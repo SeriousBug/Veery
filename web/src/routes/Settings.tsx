@@ -19,6 +19,7 @@ import { http, HttpError } from "../api/http";
 import { toaster } from "../lib/toaster";
 import { ToggleField } from "../components/ToggleField";
 import { NotificationsSection } from "../components/NotificationsSection";
+import { RaidScheduleSection } from "../components/RaidScheduleSection";
 import { useAuth } from "../auth/AuthProvider";
 import { formatAge } from "../lib/format";
 import type { Settings as SettingsModel, DiskItem } from "../api/generated";
@@ -149,6 +150,8 @@ export function Settings() {
       )}
 
       <DiskVisibilitySection />
+
+      {user?.isAdmin && <RaidScheduleSection />}
 
       {user?.isAdmin && <NotificationsSection />}
 

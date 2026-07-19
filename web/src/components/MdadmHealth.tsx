@@ -7,7 +7,7 @@ import { useLiveData } from "../live/LiveData";
 import { useAuth } from "../auth/AuthProvider";
 import { http, HttpError } from "../api/http";
 import { toaster } from "../lib/toaster";
-import { clampPct, formatRate } from "../lib/format";
+import { clampPct, formatRate, formatAge } from "../lib/format";
 import { ConfirmDialog } from "./ConfirmDialog";
 import type { MdArray, MdArrayState } from "../api/generated";
 
@@ -135,7 +135,13 @@ function ArrayRow({ array }: { array: MdArray }) {
         </div>
       </div>
 
-      {syncing && <SyncProgress array={array} />}
+      {syncing ? (
+        <SyncProgress array={array} />
+      ) : (
+        <span className={css({ fontSize: "sm", color: "textMuted", fontWeight: "medium" })}>
+          Last scan: {formatAge(array.lastScanAt)}
+        </span>
+      )}
 
       <ConfirmDialog
         open={confirm}
