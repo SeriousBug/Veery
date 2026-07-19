@@ -118,6 +118,9 @@ func (s *Server) routes() {
 	// Starting a RAID scrub writes to sysfs and drives host I/O for a long time,
 	// so it is admin-only. Health/progress rides the WS metrics push.
 	s.mux.HandleFunc("POST /api/mdadm/{name}/scan", s.requireAdmin(s.handleStartMdadmScan))
+	// Scheduled scrubs run host I/O on a timer, so editing them is admin-only.
+	s.mux.HandleFunc("GET /api/mdadm/schedules", s.requireAdmin(s.handleGetMdadmSchedules))
+	s.mux.HandleFunc("PUT /api/mdadm/schedules", s.requireAdmin(s.handleSetMdadmSchedules))
 
 	// Notifications (admin): the service URLs embed webhook tokens, so unlike
 	// the rest of settings these are not readable by every signed-in user.

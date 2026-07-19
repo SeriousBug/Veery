@@ -19,10 +19,13 @@
     "@tanstack/react-router": "^1.132.0",
     "lucide-react": "^0.544.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "rrule": "^2.8.1"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "devDependencies": {
     "@pandacss/dev": "^1.6.1",

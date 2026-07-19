@@ -40,6 +40,26 @@ const EVENTS: { event: NotificationEvent; title: string; hint: string }[] = [
     title: "Sign-ins and passkeys",
     hint: "Someone signs in, or a new passkey is enrolled.",
   },
+  {
+    event: "raid_unhealthy",
+    title: "RAID unhealthy",
+    hint: "A RAID array goes degraded or failed, and again when it recovers.",
+  },
+  {
+    event: "raid_disk_offline",
+    title: "RAID disk offline",
+    hint: "A member disk drops out of a RAID array, and again when it comes back.",
+  },
+  {
+    event: "raid_scan_started",
+    title: "RAID scan started",
+    hint: "A data-scrub starts on a RAID array — scheduled, from a host cron, or run by hand.",
+  },
+  {
+    event: "raid_scan_finished",
+    title: "RAID scan finished",
+    hint: "A data-scrub finishes and the array returns to idle.",
+  },
 ];
 
 export function NotificationsSection() {

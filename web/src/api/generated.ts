@@ -171,6 +171,33 @@ export interface MdArray {
   syncSpeedKBs: number /* uint64 */; // 0 when idle
   syncFinish: string; // e.g. "189.2min", "" when idle
   mismatchCnt: number /* uint64 */;
+  /**
+   * LastScanAt is the Unix time (seconds) of the last data-scrub Veery saw
+   * finish on this array. The kernel keeps no such timestamp, so Veery records
+   * it when it observes a check return to idle. 0 means unknown (none seen yet).
+   */
+  lastScanAt: number /* int64 */;
+}
+/**
+ * MdadmSchedule is a per-array automatic data-scrub schedule.
+ */
+export interface MdadmSchedule {
+  /**
+   * RRule is an iCal RRULE (RFC 5545) describing when to scrub, e.g.
+   * "FREQ=WEEKLY;BYDAY=SU;BYHOUR=20;BYMINUTE=0" for Sundays at 8PM. It is
+   * evaluated in the server's local timezone (set TZ to control it).
+   */
+  rrule: string;
+  /**
+   * Enabled gates the schedule without discarding the rule.
+   */
+  enabled: boolean;
+}
+/**
+ * MdadmScheduleConfig maps a RAID array name (e.g. "md0") to its scrub schedule.
+ */
+export interface MdadmScheduleConfig {
+  schedules: { [key: string]: MdadmSchedule};
 }
 /**
  * MdMember is one member device of an array and whether it is up.
@@ -314,6 +341,27 @@ export const EventContainerAdopted: NotificationEvent = "container_adopted";
  * EventAuth fires on passkey enrollment, logins and other account changes.
  */
 export const EventAuth: NotificationEvent = "auth";
+/**
+ * EventRaidScanStarted fires when a data-scrub (check) begins on a RAID
+ * array, whoever started it — Veery's scheduler, a host cron, or a manual
+ * mdadm command — since it is detected as a state transition.
+ */
+export const EventRaidScanStarted: NotificationEvent = "raid_scan_started";
+/**
+ * EventRaidScanFinished fires when a data-scrub finishes and the array
+ * returns to idle.
+ */
+export const EventRaidScanFinished: NotificationEvent = "raid_scan_finished";
+/**
+ * EventRaidUnhealthy fires when a RAID array goes degraded or failed, and
+ * again when it recovers to healthy.
+ */
+export const EventRaidUnhealthy: NotificationEvent = "raid_unhealthy";
+/**
+ * EventRaidDiskOffline fires when a member disk of a RAID array drops out,
+ * and again when it comes back.
+ */
+export const EventRaidDiskOffline: NotificationEvent = "raid_disk_offline";
 /**
  * NotificationConfig is where notifications go and which events are sent.
  */
