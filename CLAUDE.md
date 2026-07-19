@@ -25,7 +25,10 @@ static Go binary with the web UI embedded (distroless/static base).
 - `internal/docker/`, `internal/metrics/` — container management and host/container metrics.
   Updates are transactional and Veery updates itself via a helper container — see `docs/updates.md`.
   Containers are the user's to create and edit (Veery only adopts them), so `reconcile.go` picks up
-  what they change behind Veery's back — see `docs/reconcile.md`.
+  what they change behind Veery's back — see `docs/reconcile.md`. Optional mdadm (Linux software
+  RAID) health reads `${HOST_PROC}/mdstat` + `${HOST_SYS}/block/*/md/` (`mdadm.go`, no `mdadm`
+  binary); enable by mounting host `/proc` and `/sys` and setting `HOST_PROC`/`HOST_SYS` (same
+  mounts host metrics need); starting a scan needs `/sys` mounted **writable** — see `docs/mdadm.md`.
 - `internal/notify/` — notifications via Shoutrrr service URLs (Discord, ntfy, Slack, webhooks, ...).
   Config comes from `VEERY_NOTIFY_URLS`/`VEERY_NOTIFY_EVENTS` or, unset, from the DB and the UI.
   Targets hold webhook tokens, so the routes are `requireAdmin` and URLs are redacted in logs.
