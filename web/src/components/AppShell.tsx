@@ -5,6 +5,7 @@ import {
   Settings as SettingsIcon,
   Mail,
   Boxes,
+  ScrollText,
   LogOut,
   Loader2,
 } from "lucide-react";
@@ -18,6 +19,7 @@ import { ConnectionLight } from "./ConnectionLight";
 
 const baseNavItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
+  { to: "/events", label: "Events", icon: ScrollText, adminOnly: true },
   { to: "/invites", label: "Invites", icon: Mail, adminOnly: true },
   { to: "/settings", label: "Settings", icon: SettingsIcon, adminOnly: false },
 ] as const;

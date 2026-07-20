@@ -12,6 +12,7 @@ import {
   PlusCircle,
   HardDrive,
   Activity,
+  ScrollText,
 } from "lucide-react";
 import { css } from "styled-system/css";
 import { hstack, vstack } from "styled-system/patterns";
@@ -118,6 +119,16 @@ export function Settings() {
             min={1}
             value={form.autoUpdateIntervalMinutes}
             onChange={(v) => setForm({ ...form, autoUpdateIntervalMinutes: v })}
+          />
+
+          <NumberField
+            icon={<ScrollText size={18} className={css({ color: "teal.500" })} />}
+            title="How long to keep the event log"
+            hint="Days of history to keep on the Events page. Older events are removed. Set to 0 to keep everything."
+            suffix="days"
+            min={0}
+            value={form.eventLogRetentionDays}
+            onChange={(v) => setForm({ ...form, eventLogRetentionDays: v })}
           />
 
           <button

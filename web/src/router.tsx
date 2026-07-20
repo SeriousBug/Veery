@@ -13,6 +13,7 @@ import { Login } from "./routes/Login";
 import { Enroll } from "./routes/Enroll";
 import { Settings } from "./routes/Settings";
 import { Invites } from "./routes/Invites";
+import { Events } from "./routes/Events";
 import { ServiceDetail } from "./routes/ServiceDetail";
 
 function protectedPage<P extends object>(Page: ComponentType<P>) {
@@ -74,6 +75,13 @@ const invitesRoute = createRoute({
   component: ProtectedInvites,
 });
 
+const ProtectedEvents = protectedPage(Events);
+const eventsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/events",
+  component: ProtectedEvents,
+});
+
 const ProtectedServiceDetail = protectedPage(ServiceDetail);
 const serviceRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -90,6 +98,7 @@ const routeTree = rootRoute.addChildren([
   enrollRoute,
   settingsRoute,
   invitesRoute,
+  eventsRoute,
   serviceRoute,
 ]);
 
