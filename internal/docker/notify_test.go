@@ -11,11 +11,17 @@ import (
 type fakeNotifier struct {
 	titles []string
 	events []api.NotificationEvent
+	metas  []api.EventMeta
 }
 
-func (f *fakeNotifier) Notify(ev api.NotificationEvent, title, body string) {
+func (f *fakeNotifier) Notify(ev api.NotificationEvent, title, body string, meta ...api.EventMeta) {
 	f.titles = append(f.titles, title)
 	f.events = append(f.events, ev)
+	var m api.EventMeta
+	if len(meta) > 0 {
+		m = meta[0]
+	}
+	f.metas = append(f.metas, m)
 }
 
 // stacksOf builds a one-stack snapshot from container name/status pairs.

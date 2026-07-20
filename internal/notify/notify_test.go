@@ -5,10 +5,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/SeriousBug/Veery/internal/api"
+	"github.com/SeriousBug/Veery/internal/store"
 )
 
 // genericURL turns an httptest server URL into a Shoutrrr generic webhook URL.
@@ -128,3 +130,46 @@ func TestEnvConfigWins(t *testing.T) {
 		t.Errorf("Save into an env-managed config = %v, want ErrEnvManaged", err)
 	}
 }
+
+// A muted event, or one with no delivery targets, must still be recorded and
+// pushed to clients: the log is what makes it safe to turn delivery off.
+func TestNotifyRecordsEvenWhenMuted(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "notify.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	n := New(st)
+	bc := &fakeBroadcaster{}
+	n.SetBroadcaster(bc)
+
+	// No URLs configured and the event muted: nothing is delivered, but it is
+	// still recorded and broadcast.
+	if err := n.Save(api.NotificationConfig{Events: map[api.NotificationEvent]bool{api.EventContainerMissing: false}}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	n.Notify(api.EventContainerMissing, "web was removed", "it is gone",
+		api.EventMeta{ContainerName: "web", StackID: "site"})
+
+	page, err := st.ListEvents(store.EventQuery{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("recorded %d events, want 1", len(page.Items))
+	}
+	got := page.Items[0]
+	if got.ContainerName != "web" || got.StackID != "site" || got.Event != api.EventContainerMissing {
+		t.Fatalf("recorded row = %+v", got)
+	}
+	if len(bc.msgs) != 1 || bc.msgs[0].Type != api.WSTypeEvent || bc.msgs[0].Event == nil {
+		t.Fatalf("broadcast = %+v, want one event message", bc.msgs)
+	}
+}
+
+type fakeBroadcaster struct {
+	msgs []api.WSMessage
+}
+
+func (f *fakeBroadcaster) Broadcast(m api.WSMessage) { f.msgs = append(f.msgs, m) }

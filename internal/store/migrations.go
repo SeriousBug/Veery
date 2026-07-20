@@ -80,6 +80,25 @@ var migrations = []string{
 	// this column existed carry an empty id and are backfilled on the first
 	// reconcile sweep.
 	`ALTER TABLE managed_containers ADD COLUMN container_id TEXT NOT NULL DEFAULT '';`,
+	// events is the recorded, searchable history of everything the notifier sees.
+	// A row is written for every event, muted for delivery or not, so the log is
+	// a complete record rather than an archive of only what was sent. It is
+	// pruned by age, so no foreign keys tie it to containers or stacks: a row
+	// outlives the service it names, and container_name/stack_id are kept as
+	// plain text for linking and filtering.
+	`CREATE TABLE events (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		event TEXT NOT NULL,
+		title TEXT NOT NULL,
+		body TEXT NOT NULL DEFAULT '',
+		container_name TEXT NOT NULL DEFAULT '',
+		stack_id TEXT NOT NULL DEFAULT '',
+		created_at INTEGER NOT NULL
+	);`,
+	// Paging walks (created_at, id) descending; filtering narrows by event type
+	// or by the service a row names.
+	`CREATE INDEX idx_events_created_at ON events(created_at DESC, id DESC);`,
+	`CREATE INDEX idx_events_container ON events(container_name);`,
 }
 
 func (s *Store) migrate() error {

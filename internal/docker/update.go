@@ -59,10 +59,12 @@ func (m *Manager) Update(ctx context.Context, managedID string) {
 			return err
 		case err != nil:
 			_ = m.st.FinishUpdateJob(id, "failed", "", err.Error())
-			m.notify(api.EventUpdateApplied, "Update failed: "+mc.ContainerName, err.Error())
+			m.notify(api.EventUpdateApplied, "Update failed: "+mc.ContainerName, err.Error(),
+				api.EventMeta{ContainerName: mc.ContainerName, StackID: mc.StackID})
 		case updated:
 			_ = m.st.FinishUpdateJob(id, "done", "Updated", "")
-			m.notify(api.EventUpdateApplied, "Updated "+mc.ContainerName, "The container is running a newer image and came up healthy.")
+			m.notify(api.EventUpdateApplied, "Updated "+mc.ContainerName, "The container is running a newer image and came up healthy.",
+				api.EventMeta{ContainerName: mc.ContainerName, StackID: mc.StackID})
 		default:
 			_ = m.st.FinishUpdateJob(id, "done", "Already up to date", "")
 		}

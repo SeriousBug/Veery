@@ -88,6 +88,7 @@ func main() {
 	})
 
 	notifier := notify.New(st)
+	notifier.SetBroadcaster(srv.Hub())
 	srv.SetNotifier(notifier)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
