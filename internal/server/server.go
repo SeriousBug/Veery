@@ -122,6 +122,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/mdadm/schedules", s.requireAdmin(s.handleGetMdadmSchedules))
 	s.mux.HandleFunc("PUT /api/mdadm/schedules", s.requireAdmin(s.handleSetMdadmSchedules))
 
+	// Event log (admin): a recorded history of everything the notifier sees,
+	// including auth events that name users, so it is not readable by every user.
+	s.mux.HandleFunc("GET /api/events", s.requireAdmin(s.handleListEvents))
+
 	// Notifications (admin): the service URLs embed webhook tokens, so unlike
 	// the rest of settings these are not readable by every signed-in user.
 	s.mux.HandleFunc("GET /api/notifications", s.requireAdmin(s.handleGetNotifications))

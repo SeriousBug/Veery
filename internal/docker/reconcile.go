@@ -111,7 +111,8 @@ func (m *Manager) adoptNew(ctx context.Context, c container.Summary, name string
 	// Veery adopts this on its own, without anyone asking it to, so it says so.
 	m.notify(api.EventContainerAdopted, "Now managing "+name,
 		"It showed up in "+stackID+", which Veery manages, so Veery is watching it too. "+
-			"Auto-update is off for it until you turn it on.")
+			"Auto-update is off for it until you turn it on.",
+		api.EventMeta{ContainerName: name, StackID: stackID})
 	return true
 }
 

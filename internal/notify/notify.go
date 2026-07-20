@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/SeriousBug/Veery/internal/api"
 	"github.com/SeriousBug/Veery/internal/store"
@@ -28,13 +29,26 @@ const EnvURLs = "VEERY_NOTIFY_URLS"
 // deliver. Unset means every event.
 const EnvEvents = "VEERY_NOTIFY_EVENTS"
 
-// Notifier sends notifications to the configured channels.
+// Broadcaster pushes a message to connected clients. The WS hub satisfies it;
+// it is optional, so a notifier without one (a CLI invocation, a test) still
+// records events, it just does not push them live.
+type Broadcaster interface {
+	Broadcast(api.WSMessage)
+}
+
+// Notifier records events and delivers them to the configured channels.
 type Notifier struct {
 	st *store.Store
 	// env is non-nil when VEERY_NOTIFY_URLS is set, in which case it wins over
 	// whatever is stored in the database.
 	env *api.NotificationConfig
+	// bc, when set, receives every recorded event for live push.
+	bc Broadcaster
 }
+
+// SetBroadcaster attaches the live-push sink. Set after New, like the docker
+// manager and server dependencies, so the constructor stays test-friendly.
+func (n *Notifier) SetBroadcaster(bc Broadcaster) { n.bc = bc }
 
 // New builds a Notifier, reading the env config once at startup.
 func New(st *store.Store) *Notifier {
@@ -112,11 +126,19 @@ func Validate(urls []string) error {
 	return nil
 }
 
-// Notify delivers an event to every configured channel, unless that event is
-// switched off. It returns immediately; delivery happens in the background and
+// Notify records an event and delivers it to every configured channel, unless
+// that event is switched off for delivery. Recording happens regardless of
+// delivery: muting a channel is about interruption, not about whether the thing
+// happened, so the log stays complete and is what makes it safe to turn an
+// event off. It returns immediately; delivery happens in the background and
 // failures are logged, since no event is worth blocking a Docker action or an
 // HTTP response on.
-func (n *Notifier) Notify(ev api.NotificationEvent, title, body string) {
+//
+// meta, when supplied, ties the event to the service it concerns so the log can
+// link a row back to it.
+func (n *Notifier) Notify(ev api.NotificationEvent, title, body string, meta ...api.EventMeta) {
+	n.record(ev, title, body, meta...)
+
 	cfg, err := n.Config()
 	if err != nil {
 		log.Printf("notifications: load config: %v", err)
@@ -130,6 +152,48 @@ func (n *Notifier) Notify(ev api.NotificationEvent, title, body string) {
 			log.Printf("notifications: send %s: %v", ev, err)
 		}
 	}()
+}
+
+// record writes the event to the log, prunes the log to its retention bound, and
+// pushes the new row to connected clients. Failures are logged, never returned:
+// the log is a convenience, and a write that trips must not stop a delivery or
+// the action that triggered it.
+func (n *Notifier) record(ev api.NotificationEvent, title, body string, meta ...api.EventMeta) {
+	if n.st == nil {
+		return
+	}
+	row := api.Event{Event: ev, Title: title, Body: body}
+	if len(meta) > 0 {
+		row.ContainerName = meta[0].ContainerName
+		row.StackID = meta[0].StackID
+	}
+	stored, err := n.st.AppendEvent(row)
+	if err != nil {
+		log.Printf("events: record %s: %v", ev, err)
+		return
+	}
+	n.pruneEvents()
+	if n.bc != nil {
+		n.bc.Broadcast(api.WSMessage{Type: api.WSTypeEvent, Event: &stored})
+	}
+}
+
+// pruneEvents drops events past the retention setting. It runs on write rather
+// than on a timer: writes are the only thing that grows the log, so pruning
+// there keeps it bounded without a background goroutine.
+func (n *Notifier) pruneEvents() {
+	settings, err := n.st.LoadSettings()
+	if err != nil {
+		log.Printf("events: load retention: %v", err)
+		return
+	}
+	if settings.EventLogRetentionDays <= 0 {
+		return
+	}
+	cutoff := time.Now().AddDate(0, 0, -settings.EventLogRetentionDays).Unix()
+	if _, err := n.st.PruneEventsOlderThan(cutoff); err != nil {
+		log.Printf("events: prune: %v", err)
+	}
 }
 
 // SendTest delivers a test message to urls, or to the saved targets when urls

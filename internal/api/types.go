@@ -221,6 +221,10 @@ const (
 	// (or was never here) has no other way to learn about an update that started,
 	// or finished, without it.
 	WSTypeJobs WSMessageType = "jobs"
+	// WSTypeEvent carries one freshly recorded event-log entry, pushed as it is
+	// written so the log page can prepend it live. It is only sent to admin
+	// clients, since the log includes auth events that name users.
+	WSTypeEvent WSMessageType = "event"
 )
 
 // WSMessage is the server→client push envelope. Exactly one payload is set.
@@ -230,6 +234,7 @@ type WSMessage struct {
 	Stacks  []Stack          `json:"stacks,omitempty"`
 	Job     *JobProgress     `json:"job,omitempty"`
 	Jobs    []JobProgress    `json:"jobs,omitempty"`
+	Event   *Event           `json:"event,omitempty"`
 }
 
 // --- HTTP request/response bodies ---
@@ -267,6 +272,10 @@ type Settings struct {
 	PollIntervalSeconds       int  `json:"pollIntervalSeconds"`
 	AutoUpdateDefault         bool `json:"autoUpdateDefault"`
 	AutoUpdateIntervalMinutes int  `json:"autoUpdateIntervalMinutes"`
+	// EventLogRetentionDays bounds how long recorded events are kept. A
+	// crash-looping container can generate events without end, so the log is
+	// pruned to this many days on write. Zero means keep forever.
+	EventLogRetentionDays int `json:"eventLogRetentionDays"`
 	// DiskVisibility overrides the default shown/hidden state per disk key. Keys
 	// absent here fall back to the built-in heuristic. Applies to all users.
 	DiskVisibility map[string]bool `json:"diskVisibility"`
@@ -323,6 +332,38 @@ var AllNotificationEvents = []NotificationEvent{
 	EventRaidDiskOffline,
 	EventRaidScanStarted,
 	EventRaidScanFinished,
+}
+
+// Event is one recorded entry in the event log: a copy of something Veery
+// notified about, kept whether or not it was actually delivered. Muting a
+// channel stops delivery, not recording, so the log stays a complete history of
+// what happened to each service.
+type Event struct {
+	ID    int64             `json:"id"`
+	Event NotificationEvent `json:"event"`
+	Title string            `json:"title"`
+	Body  string            `json:"body"`
+	// ContainerName and StackID tie the entry to the service it concerns, so the
+	// UI can link a row back to it. Both are empty for events that name no
+	// service (e.g. auth events).
+	ContainerName string `json:"containerName"`
+	StackID       string `json:"stackId"`
+	CreatedAt     int64  `json:"createdAt"`
+}
+
+// EventMeta is the optional service context an event carries into the notifier,
+// which records it on the log row. Kept separate from Event so a caller only
+// has to name the container or stack, not build a whole row.
+type EventMeta struct {
+	ContainerName string
+	StackID       string
+}
+
+// EventPage is a cursor-paginated slice of the event log, newest first.
+// NextCursor is empty once the oldest recorded event has been returned.
+type EventPage struct {
+	Items      []Event `json:"items"`
+	NextCursor string  `json:"nextCursor"`
 }
 
 // NotificationConfig is where notifications go and which events are sent.

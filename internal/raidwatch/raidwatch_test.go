@@ -14,7 +14,7 @@ type fakeNotifier struct {
 	titles []string
 }
 
-func (f *fakeNotifier) Notify(ev api.NotificationEvent, title, body string) {
+func (f *fakeNotifier) Notify(ev api.NotificationEvent, title, body string, meta ...api.EventMeta) {
 	f.events = append(f.events, ev)
 	f.titles = append(f.titles, title)
 }

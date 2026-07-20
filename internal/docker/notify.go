@@ -10,16 +10,16 @@ import (
 // Notifier receives notable events for delivery to the user's notification
 // channels. It is optional: a nil notifier disables notifications.
 type Notifier interface {
-	Notify(ev api.NotificationEvent, title, body string)
+	Notify(ev api.NotificationEvent, title, body string, meta ...api.EventMeta)
 }
 
 // SetNotifier attaches the notifier. Like SetDocker on the server, it is set
 // after construction so the constructor signature stays stable for tests.
 func (m *Manager) SetNotifier(n Notifier) { m.notif = n }
 
-func (m *Manager) notify(ev api.NotificationEvent, title, body string) {
+func (m *Manager) notify(ev api.NotificationEvent, title, body string, meta ...api.EventMeta) {
 	if m.notif != nil {
-		m.notif.Notify(ev, title, body)
+		m.notif.Notify(ev, title, body, meta...)
 	}
 }
 
@@ -70,11 +70,13 @@ func (m *Manager) noteStatuses(stacks []api.Stack) {
 
 		for _, c := range changed {
 			if title, body := statusMessage(c, m.lastStatus[c.ContainerName]); title != "" {
-				m.notify(api.EventContainerStatus, title, body)
+				m.notify(api.EventContainerStatus, title, body,
+					api.EventMeta{ContainerName: c.ContainerName, StackID: st.ID})
 			}
 		}
 		for _, msg := range removalMessages(st, gone, managed) {
-			m.notify(api.EventContainerMissing, msg.title, msg.body)
+			m.notify(api.EventContainerMissing, msg.title, msg.body,
+				api.EventMeta{ContainerName: msg.containerName, StackID: st.ID})
 		}
 	}
 	if sameStatuses(m.lastStatus, seen) {
@@ -98,7 +100,9 @@ func sameStatuses(a, b map[string]api.ContainerStatus) bool {
 	return true
 }
 
-type message struct{ title, body string }
+// message is one removal notification. containerName is empty for a whole-stack
+// takedown, which names no single container, and set for the odd-one-out case.
+type message struct{ title, body, containerName string }
 
 // removalMessages describes the managed containers of one stack that were
 // removed from the host since the last sweep.
@@ -124,6 +128,7 @@ func removalMessages(st api.Stack, gone []api.Container, managed int) []message 
 			title: c.ContainerName + " was removed",
 			body: "The container no longer exists on this machine. It may have been removed outside Veery. " +
 				"Bring it back up to recreate it, or forget it if you meant to remove it.",
+			containerName: c.ContainerName,
 		})
 	}
 	return out

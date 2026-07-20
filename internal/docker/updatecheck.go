@@ -50,7 +50,8 @@ func (m *Manager) CheckUpdates(ctx context.Context) {
 			// own and reports its outcome, so announcing it here is noise.
 			if avail && !mc.AutoUpdate {
 				m.notify(api.EventUpdateAvailable, "Update available for "+mc.ContainerName,
-					"A newer image has been published. Auto-update is off for this container, so it will keep running the current image until you update it.")
+					"A newer image has been published. Auto-update is off for this container, so it will keep running the current image until you update it.",
+					api.EventMeta{ContainerName: mc.ContainerName, StackID: mc.StackID})
 			}
 		}
 		m.setUpdateAvailable(mc.ContainerName, avail)

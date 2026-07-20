@@ -142,13 +142,15 @@ func (m *Manager) finishApply(jobID, name string, err error) error {
 		if jobID != "" {
 			_ = m.st.FinishUpdateJob(jobID, "failed", "", err.Error())
 		}
-		m.notify(api.EventUpdateApplied, "Update failed: "+name, err.Error())
+		m.notify(api.EventUpdateApplied, "Update failed: "+name, err.Error(),
+			api.EventMeta{ContainerName: name})
 		return err
 	}
 	if jobID != "" {
 		_ = m.st.FinishUpdateJob(jobID, "done", "Updated", "")
 	}
-	m.notify(api.EventUpdateApplied, "Updated "+name, "The container is running a newer image and came up healthy.")
+	m.notify(api.EventUpdateApplied, "Updated "+name, "The container is running a newer image and came up healthy.",
+		api.EventMeta{ContainerName: name})
 	return nil
 }
 

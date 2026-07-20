@@ -18,7 +18,7 @@ import (
 // Notifier delivers events to the user's notification channels. A nil notifier
 // disables notifications, matching the docker manager's optional notifier.
 type Notifier interface {
-	Notify(ev api.NotificationEvent, title, body string)
+	Notify(ev api.NotificationEvent, title, body string, meta ...api.EventMeta)
 }
 
 // Watcher polls mdadm health and drives alerts, last-scan tracking and the

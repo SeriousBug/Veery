@@ -20,6 +20,9 @@ type Hub struct {
 
 type wsClient struct {
 	send chan []byte
+	// admin gates the event-log stream: its rows include auth events that name
+	// users, so they only go to admin clients. Everything else fans out to all.
+	admin bool
 }
 
 func newHub() *Hub {
@@ -45,7 +48,11 @@ func (h *Hub) Broadcast(msg api.WSMessage) {
 		clients = append(clients, c)
 	}
 	h.mu.Unlock()
+	adminOnly := msg.Type == api.WSTypeEvent
 	for _, c := range clients {
+		if adminOnly && !c.admin {
+			continue
+		}
 		select {
 		case c.send <- data:
 		default:
@@ -95,7 +102,8 @@ func (h *Hub) remove(c *wsClient) {
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.currentUser(r); !ok {
+	u, ok := s.currentUser(r)
+	if !ok {
 		writeErr(w, http.StatusUnauthorized, "not authenticated")
 		return
 	}
@@ -107,7 +115,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.CloseNow()
 
-	client := &wsClient{send: make(chan []byte, 32)}
+	client := &wsClient{send: make(chan []byte, 32), admin: u.user.IsAdmin}
 	s.hub.add(client)
 	defer s.hub.remove(client)
 	// A page loaded in the middle of an update would otherwise show nothing until

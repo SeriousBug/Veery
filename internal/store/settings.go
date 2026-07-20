@@ -14,12 +14,14 @@ const (
 	DefaultPollIntervalSeconds       = 5
 	DefaultAutoUpdateDefault         = false
 	DefaultAutoUpdateIntervalMinutes = 60
+	DefaultEventLogRetentionDays     = 30
 )
 
 const (
 	keyPollInterval       = "poll_interval_seconds"
 	keyAutoUpdateDefault  = "auto_update_default"
 	keyAutoUpdateInterval = "auto_update_interval_minutes"
+	keyEventRetention     = "event_log_retention_days"
 	keyDiskVisibility     = "disk_visibility"
 	keyDiskPeaks          = "disk_io_peaks"
 )
@@ -30,6 +32,7 @@ func (s *Store) LoadSettings() (api.Settings, error) {
 		PollIntervalSeconds:       DefaultPollIntervalSeconds,
 		AutoUpdateDefault:         DefaultAutoUpdateDefault,
 		AutoUpdateIntervalMinutes: DefaultAutoUpdateIntervalMinutes,
+		EventLogRetentionDays:     DefaultEventLogRetentionDays,
 		DiskVisibility:            map[string]bool{},
 	}
 	if v, err := s.getInt(keyPollInterval); err == nil {
@@ -47,6 +50,11 @@ func (s *Store) LoadSettings() (api.Settings, error) {
 	} else if !errors.Is(err, ErrNotFound) {
 		return out, err
 	}
+	if v, err := s.getInt(keyEventRetention); err == nil {
+		out.EventLogRetentionDays = v
+	} else if !errors.Is(err, ErrNotFound) {
+		return out, err
+	}
 	vis, err := s.LoadDiskVisibility()
 	if err != nil {
 		return out, err
@@ -61,6 +69,9 @@ func (s *Store) SaveSettings(cfg api.Settings) error {
 		return err
 	}
 	if err := s.SetSetting(keyAutoUpdateInterval, strconv.Itoa(cfg.AutoUpdateIntervalMinutes)); err != nil {
+		return err
+	}
+	if err := s.SetSetting(keyEventRetention, strconv.Itoa(cfg.EventLogRetentionDays)); err != nil {
 		return err
 	}
 	v := "0"
