@@ -134,6 +134,77 @@ export interface HostMetrics {
   memTotal: number /* uint64 */;
   disks: DiskUsage[];
   diskActivity: DiskActivity[];
+  /**
+   * Mdadm carries Linux software RAID array health. Nil/empty when the host
+   * has no md arrays or /proc and /sys aren't mounted in; the UI hides the
+   * panel then.
+   */
+  mdadm: MdArray[];
+}
+/**
+ * MdArrayState is the health rollup for a Linux software RAID (mdadm) array.
+ */
+export type MdArrayState = string;
+export const MdHealthy: MdArrayState = "healthy";
+export const MdDegraded: MdArrayState = "degraded";
+export const MdRecovering: MdArrayState = "recovering"; // resync/recover/reshape/check in progress
+export const MdFailed: MdArrayState = "failed";
+/**
+ * MdSyncAction is the array's current sync operation, mirroring the sysfs
+ * sync_action value.
+ */
+export type MdSyncAction = string; // "idle" | "check" | "resync" | "recover" | "reshape"
+/**
+ * MdArray is one Linux software RAID array's health, read from /proc/mdstat and
+ * sysfs. Empty on hosts without RAID (or without /proc and /sys mounted in), so
+ * the UI hides the panel.
+ */
+export interface MdArray {
+  name: string; // md0
+  level: string; // raid1
+  state: MdArrayState;
+  devicesTotal: number /* int */;
+  devicesUp: number /* int */;
+  members: MdMember[];
+  syncAction: MdSyncAction; // idle when no scan running
+  syncPercent: number /* float64 */; // 0 when idle
+  syncSpeedKBs: number /* uint64 */; // 0 when idle
+  syncFinish: string; // e.g. "189.2min", "" when idle
+  mismatchCnt: number /* uint64 */;
+  /**
+   * LastScanAt is the Unix time (seconds) of the last data-scrub Veery saw
+   * finish on this array. The kernel keeps no such timestamp, so Veery records
+   * it when it observes a check return to idle. 0 means unknown (none seen yet).
+   */
+  lastScanAt: number /* int64 */;
+}
+/**
+ * MdadmSchedule is a per-array automatic data-scrub schedule.
+ */
+export interface MdadmSchedule {
+  /**
+   * RRule is an iCal RRULE (RFC 5545) describing when to scrub, e.g.
+   * "FREQ=WEEKLY;BYDAY=SU;BYHOUR=20;BYMINUTE=0" for Sundays at 8PM. It is
+   * evaluated in the server's local timezone (set TZ to control it).
+   */
+  rrule: string;
+  /**
+   * Enabled gates the schedule without discarding the rule.
+   */
+  enabled: boolean;
+}
+/**
+ * MdadmScheduleConfig maps a RAID array name (e.g. "md0") to its scrub schedule.
+ */
+export interface MdadmScheduleConfig {
+  schedules: { [key: string]: MdadmSchedule};
+}
+/**
+ * MdMember is one member device of an array and whether it is up.
+ */
+export interface MdMember {
+  device: string; // sdb1
+  up: boolean;
 }
 /**
  * ContainerMetrics is a snapshot of one container's resource use.
@@ -283,6 +354,27 @@ export const EventContainerAdopted: NotificationEvent = "container_adopted";
  * EventAuth fires on passkey enrollment, logins and other account changes.
  */
 export const EventAuth: NotificationEvent = "auth";
+/**
+ * EventRaidScanStarted fires when a data-scrub (check) begins on a RAID
+ * array, whoever started it — Veery's scheduler, a host cron, or a manual
+ * mdadm command — since it is detected as a state transition.
+ */
+export const EventRaidScanStarted: NotificationEvent = "raid_scan_started";
+/**
+ * EventRaidScanFinished fires when a data-scrub finishes and the array
+ * returns to idle.
+ */
+export const EventRaidScanFinished: NotificationEvent = "raid_scan_finished";
+/**
+ * EventRaidUnhealthy fires when a RAID array goes degraded or failed, and
+ * again when it recovers to healthy.
+ */
+export const EventRaidUnhealthy: NotificationEvent = "raid_unhealthy";
+/**
+ * EventRaidDiskOffline fires when a member disk of a RAID array drops out,
+ * and again when it comes back.
+ */
+export const EventRaidDiskOffline: NotificationEvent = "raid_disk_offline";
 /**
  * Event is one recorded entry in the event log: a copy of something Veery
  * notified about, kept whether or not it was actually delivered. Muting a

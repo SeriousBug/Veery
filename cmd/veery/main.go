@@ -18,6 +18,7 @@ import (
 	"github.com/SeriousBug/Veery/internal/docker"
 	"github.com/SeriousBug/Veery/internal/metrics"
 	"github.com/SeriousBug/Veery/internal/notify"
+	"github.com/SeriousBug/Veery/internal/raidwatch"
 	"github.com/SeriousBug/Veery/internal/server"
 	"github.com/SeriousBug/Veery/internal/store"
 )
@@ -114,6 +115,11 @@ func main() {
 		go dkr.AutoUpdatePoller(ctx)
 		go dkr.UpdateCheckPoller(ctx)
 	}
+
+	// The RAID watcher reads /proc and /sys, not Docker, so it runs regardless
+	// of whether the Docker manager came up. It no-ops on hosts without md
+	// arrays or the mounts.
+	go raidwatch.New(st, notifier).Poller(ctx)
 
 	httpServer := &http.Server{
 		Addr:              addr,
@@ -219,6 +225,16 @@ func pollMetrics(ctx context.Context, dkr *docker.Manager, hub *server.Hub, st *
 			log.Printf("metrics: load disk visibility: %v", err)
 		}
 		host := metrics.BuildHostMetrics(sample, vis, peaks)
+		host.Mdadm = metrics.ScanMdadm()
+		if len(host.Mdadm) > 0 {
+			if lastScan, err := st.LoadMdadmLastScan(); err == nil {
+				for i := range host.Mdadm {
+					host.Mdadm[i].LastScanAt = lastScan[host.Mdadm[i].Name]
+				}
+			} else {
+				log.Printf("metrics: load mdadm last scan: %v", err)
+			}
+		}
 		containers, err := dkr.ContainerStats(ctx)
 		if err != nil {
 			log.Printf("metrics: container stats: %v", err)

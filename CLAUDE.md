@@ -25,7 +25,14 @@ static Go binary with the web UI embedded (distroless/static base).
 - `internal/docker/`, `internal/metrics/` — container management and host/container metrics.
   Updates are transactional and Veery updates itself via a helper container — see `docs/updates.md`.
   Containers are the user's to create and edit (Veery only adopts them), so `reconcile.go` picks up
-  what they change behind Veery's back — see `docs/reconcile.md`.
+  what they change behind Veery's back — see `docs/reconcile.md`. Optional mdadm (Linux software
+  RAID) health reads `${HOST_PROC}/mdstat` + `${HOST_SYS}/block/*/md/` (`mdadm.go`, no `mdadm`
+  binary); enable by mounting host `/proc` and `/sys` and setting `HOST_PROC`/`HOST_SYS` (same
+  mounts host metrics need); starting a scan needs `/sys` mounted **writable** — see `docs/mdadm.md`.
+- `internal/raidwatch/` — stateful mdadm poller on top of `ScanMdadm`: edge-triggered RAID alerts
+  (`raid_scan_started`/`raid_scan_finished`/`raid_unhealthy`/`raid_disk_offline`), the Veery-tracked
+  last-scan time (`MdArray.LastScanAt`), and per-array scheduled scrubs from iCal RRULE strings
+  (rrule-go), evaluated in the server's `TZ` — see `docs/mdadm.md`.
 - `internal/notify/` — notifications via Shoutrrr service URLs (Discord, ntfy, Slack, webhooks, ...).
   Config comes from `VEERY_NOTIFY_URLS`/`VEERY_NOTIFY_EVENTS` or, unset, from the DB and the UI.
   Targets hold webhook tokens, so the routes are `requireAdmin` and URLs are redacted in logs.

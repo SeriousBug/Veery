@@ -115,6 +115,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /api/settings", s.requireAuth(s.handlePutSettings))
 	s.mux.HandleFunc("GET /api/disks", s.requireAuth(s.handleListDisks))
 	s.mux.HandleFunc("PUT /api/disks", s.requireAuth(s.handleSetDiskVisibility))
+	// Starting a RAID scrub writes to sysfs and drives host I/O for a long time,
+	// so it is admin-only. Health/progress rides the WS metrics push.
+	s.mux.HandleFunc("POST /api/mdadm/{name}/scan", s.requireAdmin(s.handleStartMdadmScan))
+	// Scheduled scrubs run host I/O on a timer, so editing them is admin-only.
+	s.mux.HandleFunc("GET /api/mdadm/schedules", s.requireAdmin(s.handleGetMdadmSchedules))
+	s.mux.HandleFunc("PUT /api/mdadm/schedules", s.requireAdmin(s.handleSetMdadmSchedules))
 
 	// Event log (admin): a recorded history of everything the notifier sees,
 	// including auth events that name users, so it is not readable by every user.
