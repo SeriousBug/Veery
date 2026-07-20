@@ -189,26 +189,40 @@ export function Events() {
             : "No events recorded yet. They'll show up here as things happen."}
         </EmptyNote>
       ) : (
-        <div className={vstack({ gap: "6", alignItems: "stretch" })}>
+        <div
+          className={vstack({
+            gap: "0",
+            alignItems: "stretch",
+            borderRadius: "xl",
+            bg: "surface",
+            borderWidth: "1px",
+            borderColor: "border",
+            boxShadow: "card",
+            overflow: "hidden",
+          })}
+        >
           {groups.map((group) => (
-            <section key={group.day} className={vstack({ gap: "3", alignItems: "stretch" })}>
+            <div key={group.day} className={vstack({ gap: "0", alignItems: "stretch" })}>
               <h2
                 className={css({
-                  fontSize: "sm",
+                  px: "4",
+                  py: "1.5",
+                  fontSize: "xs",
                   fontWeight: "extrabold",
                   color: "textMuted",
                   textTransform: "uppercase",
-                  letterSpacing: "0.04em",
+                  letterSpacing: "0.05em",
+                  bg: "bg",
+                  borderBottomWidth: "1px",
+                  borderColor: "border",
                 })}
               >
                 {group.day}
               </h2>
-              <div className={vstack({ gap: "2.5", alignItems: "stretch" })}>
-                {group.items.map((ev) => (
-                  <EventRow key={ev.id} event={ev} stacks={stacks} />
-                ))}
-              </div>
-            </section>
+              {group.items.map((ev) => (
+                <EventRow key={ev.id} event={ev} stacks={stacks} />
+              ))}
+            </div>
           ))}
 
           {events.hasNextPage && (
@@ -217,23 +231,21 @@ export function Events() {
               disabled={events.isFetchingNextPage}
               className={hstack({
                 gap: "2",
-                alignSelf: "center",
-                px: "5",
-                py: "2.5",
-                borderRadius: "full",
-                bg: "surface",
-                borderWidth: "1px",
-                borderColor: "border",
-                boxShadow: "card",
+                justify: "center",
+                px: "4",
+                py: "3",
+                bg: "bg",
+                fontSize: "sm",
                 fontWeight: "bold",
+                color: "textMuted",
                 cursor: "pointer",
                 transition: "all 0.15s ease",
-                _hover: { bg: "ink.100" },
+                _hover: { bg: "ink.100", color: "text" },
                 _disabled: { opacity: 0.6, cursor: "not-allowed" },
               })}
             >
               {events.isFetchingNextPage && (
-                <Loader2 size={17} className={css({ animation: "spin 0.9s linear infinite" })} />
+                <Loader2 size={15} className={css({ animation: "spin 0.9s linear infinite" })} />
               )}
               Load more
             </button>
@@ -256,45 +268,61 @@ function EventRow({ event, stacks }: { event: LogEvent; stacks: Stack[] }) {
 
   return (
     <div
-      className={hstack({
-        gap: "3.5",
-        alignItems: "flex-start",
-        p: "4",
-        borderRadius: "lg",
-        bg: "surface",
-        borderWidth: "1px",
+      className={flex({
+        align: "center",
+        gap: "3",
+        px: "4",
+        py: "2.5",
+        borderBottomWidth: "1px",
         borderColor: "border",
-        boxShadow: "card",
+        transition: "background 0.12s ease",
+        _hover: { bg: "bg" },
+        _last: { borderBottomWidth: "0" },
       })}
     >
       <span
         className={flex({
           align: "center",
           justify: "center",
-          w: "9",
-          h: "9",
-          borderRadius: "full",
+          w: "6",
+          h: "6",
+          borderRadius: "md",
           bg: meta.bg,
           color: meta.fg,
           flexShrink: 0,
         })}
         title={meta.label}
       >
-        <Icon size={18} />
+        <Icon size={14} />
       </span>
-      <div className={vstack({ gap: "0.5", alignItems: "stretch", flex: "1", minW: "0" })}>
-        <div className={hstack({ gap: "2", flexWrap: "wrap", justify: "space-between" })}>
-          <span className={css({ fontWeight: "bold", color: "text" })}>{event.title}</span>
-          <time
-            className={css({ fontSize: "xs", color: "textMuted", flexShrink: 0 })}
-            dateTime={new Date(event.createdAt * 1000).toISOString()}
-          >
-            {formatTime(event.createdAt)}
-          </time>
-        </div>
-        {event.body && (
-          <p className={css({ fontSize: "sm", color: "textMuted", lineHeight: "1.5" })}>{event.body}</p>
-        )}
+      <span
+        className={css({
+          fontWeight: "bold",
+          fontSize: "sm",
+          color: "text",
+          whiteSpace: "nowrap",
+          flexShrink: 0,
+        })}
+      >
+        {event.title}
+      </span>
+      {event.body && (
+        <span
+          className={css({
+            flex: "1",
+            minW: "0",
+            fontSize: "sm",
+            color: "textMuted",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          })}
+          title={event.body}
+        >
+          {event.body}
+        </span>
+      )}
+      <span className={hstack({ gap: "3", ml: "auto", flexShrink: 0 })}>
         {serviceId && (
           <Link
             to="/service/$id"
@@ -304,14 +332,24 @@ function EventRow({ event, stacks }: { event: LogEvent; stacks: Stack[] }) {
               fontWeight: "bold",
               color: "grape.600",
               textDecoration: "none",
-              mt: "0.5",
+              maxW: "40",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              display: { base: "none", sm: "block" },
               _hover: { textDecoration: "underline" },
             })}
           >
-            {event.containerName || serviceId} →
+            {event.containerName || serviceId}
           </Link>
         )}
-      </div>
+        <time
+          className={css({ fontSize: "xs", color: "textMuted", w: "16", textAlign: "right" })}
+          dateTime={new Date(event.createdAt * 1000).toISOString()}
+        >
+          {formatTime(event.createdAt)}
+        </time>
+      </span>
     </div>
   );
 }
