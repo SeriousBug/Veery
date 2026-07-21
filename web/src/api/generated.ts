@@ -300,6 +300,14 @@ export interface SetAutoUpdateRequest {
   autoUpdate: boolean;
 }
 /**
+ * UpdateCheckResult reports the outcome of a manual "check for updates" request.
+ * UpdatesAvailable counts how many of the checked containers have a newer image
+ * after the check. New state also arrives over the WS stacks push.
+ */
+export interface UpdateCheckResult {
+  updatesAvailable: number /* int */;
+}
+/**
  * Settings are the mutable app settings.
  */
 export interface Settings {

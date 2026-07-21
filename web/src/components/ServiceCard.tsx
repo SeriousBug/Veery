@@ -5,7 +5,14 @@ import { grid, hstack, vstack } from "styled-system/patterns";
 import { StatusPill } from "./StatusPill";
 import { Gauge } from "./Gauge";
 import { ActionBar } from "./ActionBar";
-import { stackAction, containerAction, forgetStack, forgetContainer } from "../lib/actions";
+import {
+  stackAction,
+  containerAction,
+  forgetStack,
+  forgetContainer,
+  checkStackUpdate,
+  checkContainerUpdate,
+} from "../lib/actions";
 import { formatBytes, formatPercent, formatUsage, ratioPct } from "../lib/format";
 import type { Container, ContainerMetrics, JobProgress, Stack } from "../api/generated";
 
@@ -124,6 +131,7 @@ export function ServiceCard({
             }
           },
           onForget: () => forgetStack(stack.id, stack.name),
+          onCheckUpdate: () => checkStackUpdate(stack.id),
         }}
       />
 
@@ -242,6 +250,7 @@ function ContainerRow({
           onBringUp: () => stackAction(stackId, "bringup"),
           onUpdate: () => containerAction(container.containerName, "update"),
           onForget: () => forgetContainer(container.containerName, container.name),
+          onCheckUpdate: () => checkContainerUpdate(container.containerName),
         }}
       />
     </div>

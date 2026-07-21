@@ -50,6 +50,12 @@ export interface ActionHandlers {
   onBringUp: () => void;
   /** Stop tracking something that has been removed from the host for good. */
   onForget?: () => void;
+  /**
+   * Re-check the registry for a newer image now. When set, the "Up to date"
+   * indicator becomes a button that triggers this and shows progress. Resolves
+   * when the check completes.
+   */
+  onCheckUpdate?: () => Promise<boolean> | void;
 }
 
 export function ActionBar({
@@ -76,6 +82,7 @@ export function ActionBar({
   const [confirmStop, setConfirmStop] = useState(false);
   const [confirmUpdate, setConfirmUpdate] = useState(false);
   const [confirmForget, setConfirmForget] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   if (busy) {
     return (
@@ -152,24 +159,46 @@ export function ActionBar({
       </button>,
     );
   } else if (showUpdate) {
-    buttons.push(
-      <span
-        key="uptodate"
-        className={hstack({
-          gap: "1.5",
-          px: size === "sm" ? "3.5" : "4",
-          py: size === "sm" ? "2" : "2.5",
-          borderRadius: "full",
-          bg: "mint.300",
-          color: "teal.600",
-          fontWeight: "extrabold",
-          fontSize: "sm",
-          whiteSpace: "nowrap",
-        })}
-      >
-        <CheckCircle2 size={16} /> Up to date
-      </span>,
-    );
+    const pill = hstack({
+      gap: "1.5",
+      px: size === "sm" ? "3.5" : "4",
+      py: size === "sm" ? "2" : "2.5",
+      borderRadius: "full",
+      bg: "mint.300",
+      color: "teal.600",
+      fontWeight: "extrabold",
+      fontSize: "sm",
+      whiteSpace: "nowrap",
+    });
+    if (checking) {
+      buttons.push(
+        <span key="uptodate" className={pill}>
+          <Loader2 size={16} className={css({ animation: "spin 0.9s linear infinite" })} />
+          Checking…
+        </span>,
+      );
+    } else if (handlers.onCheckUpdate) {
+      const runCheck = () => {
+        setChecking(true);
+        void Promise.resolve(handlers.onCheckUpdate?.()).finally(() => setChecking(false));
+      };
+      buttons.push(
+        <button
+          key="uptodate"
+          className={cx(pill, css({ cursor: "pointer", _hover: { bg: "mint.400" } }))}
+          title="Check for updates now"
+          onClick={runCheck}
+        >
+          <CheckCircle2 size={16} /> Up to date
+        </button>,
+      );
+    } else {
+      buttons.push(
+        <span key="uptodate" className={pill}>
+          <CheckCircle2 size={16} /> Up to date
+        </span>,
+      );
+    }
   }
 
   return (

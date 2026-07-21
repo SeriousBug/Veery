@@ -1,6 +1,6 @@
 import { http, HttpError } from "../api/http";
 import { toaster } from "./toaster";
-import type { SetAutoUpdateRequest } from "../api/generated";
+import type { SetAutoUpdateRequest, UpdateCheckResult } from "../api/generated";
 
 function enc(id: string): string {
   return encodeURIComponent(id);
@@ -73,6 +73,50 @@ export function forgetContainer(id: string, name: string): Promise<boolean> {
 
 export function forgetStack(id: string, name: string): Promise<boolean> {
   return forget(`/api/stacks/${enc(id)}/managed`, name);
+}
+
+/**
+ * Ask the server to re-check the registry for newer images right now. Unlike
+ * fire(), the outcome is known when the request resolves, so we toast it
+ * directly; any newly found update also flips the UI via the WS stacks push.
+ */
+async function checkUpdates(path: string): Promise<boolean> {
+  try {
+    const res = await http.post<UpdateCheckResult>(path);
+    toaster.create(
+      res.updatesAvailable > 0
+        ? {
+            type: "success",
+            title:
+              res.updatesAvailable === 1
+                ? "An update is available"
+                : `${res.updatesAvailable} updates available`,
+          }
+        : { type: "info", title: "Everything is up to date" },
+    );
+    return true;
+  } catch (err) {
+    const message =
+      err instanceof HttpError ? err.message : "Could not reach the server.";
+    toaster.create({
+      type: "error",
+      title: "Couldn't check for updates",
+      description: message,
+    });
+    return false;
+  }
+}
+
+export function checkContainerUpdate(id: string): Promise<boolean> {
+  return checkUpdates(`/api/containers/${enc(id)}/check-update`);
+}
+
+export function checkStackUpdate(id: string): Promise<boolean> {
+  return checkUpdates(`/api/stacks/${enc(id)}/check-update`);
+}
+
+export function checkAllUpdates(): Promise<boolean> {
+  return checkUpdates(`/api/updates/check`);
 }
 
 export async function setAutoUpdate(

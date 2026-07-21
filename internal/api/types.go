@@ -267,6 +267,13 @@ type SetAutoUpdateRequest struct {
 	AutoUpdate  bool   `json:"autoUpdate"`
 }
 
+// UpdateCheckResult reports the outcome of a manual "check for updates" request.
+// UpdatesAvailable counts how many of the checked containers have a newer image
+// after the check. New state also arrives over the WS stacks push.
+type UpdateCheckResult struct {
+	UpdatesAvailable int `json:"updatesAvailable"`
+}
+
 // Settings are the mutable app settings.
 type Settings struct {
 	PollIntervalSeconds       int  `json:"pollIntervalSeconds"`

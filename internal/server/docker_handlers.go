@@ -131,6 +131,48 @@ func (s *Server) handleContainerUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// handleCheckContainerUpdate re-checks one container's registry for a newer
+// image right now, instead of waiting for the background poller. It runs
+// synchronously so the UI can await the result; fresh flags also ride the WS
+// stacks push that a change triggers.
+func (s *Server) handleCheckContainerUpdate(w http.ResponseWriter, r *http.Request) {
+	if !s.dockerReady(w) {
+		return
+	}
+	n, err := s.dkr.CheckContainerUpdates(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "container not managed")
+		return
+	}
+	writeJSON(w, http.StatusOK, api.UpdateCheckResult{UpdatesAvailable: n})
+}
+
+// handleCheckStackUpdate re-checks every container in one stack right now.
+func (s *Server) handleCheckStackUpdate(w http.ResponseWriter, r *http.Request) {
+	if !s.dockerReady(w) {
+		return
+	}
+	n, err := s.dkr.CheckStackUpdates(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, api.UpdateCheckResult{UpdatesAvailable: n})
+}
+
+// handleCheckAllUpdates re-checks every managed container right now.
+func (s *Server) handleCheckAllUpdates(w http.ResponseWriter, r *http.Request) {
+	if !s.dockerReady(w) {
+		return
+	}
+	n, err := s.dkr.CheckAllUpdates(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, api.UpdateCheckResult{UpdatesAvailable: n})
+}
+
 // detached derives a context that outlives the request. A pull and health-check
 // can run for minutes, and an update aborted halfway because someone closed a
 // tab is exactly the state that leaves a service down. Progress reaches the UI

@@ -13,6 +13,8 @@ import {
   containerAction,
   forgetContainer,
   forgetStack,
+  checkStackUpdate,
+  checkContainerUpdate,
 } from "../lib/actions";
 import { formatBytes, formatPercent, formatUsage, ratioPct, formatAge } from "../lib/format";
 import type { Container, ContainerMetrics, JobProgress } from "../api/generated";
@@ -99,6 +101,7 @@ export function ServiceDetail({ id }: { id: string }) {
               }
             },
             onForget: () => forgetStack(stack.id, stack.name),
+            onCheckUpdate: () => checkStackUpdate(stack.id),
           }}
         />
       </div>
@@ -205,6 +208,7 @@ function ContainerPanel({
           onBringUp: () => stackAction(stackId, "bringup"),
           onUpdate: () => containerAction(container.containerName, "update"),
           onForget: () => forgetContainer(container.containerName, container.name),
+          onCheckUpdate: () => checkContainerUpdate(container.containerName),
         }}
       />
 
