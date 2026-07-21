@@ -37,13 +37,60 @@ func (m *Manager) CheckUpdates(ctx context.Context) {
 		log.Printf("update-check: list managed: %v", err)
 		return
 	}
+	m.checkUpdates(ctx, managed)
+}
+
+// CheckContainerUpdates re-checks a single managed container on demand. It
+// backs the manual "check for updates" affordance for one container.
+func (m *Manager) CheckContainerUpdates(ctx context.Context, idOrName string) (int, error) {
+	mc, err := m.st.ResolveManaged(idOrName)
+	if err != nil {
+		return 0, err
+	}
+	return m.checkUpdates(ctx, []store.ManagedContainer{mc}), nil
+}
+
+// CheckStackUpdates re-checks every managed container in one stack on demand.
+func (m *Manager) CheckStackUpdates(ctx context.Context, stackID string) (int, error) {
+	managed, err := m.st.AllManaged()
+	if err != nil {
+		return 0, err
+	}
+	var subset []store.ManagedContainer
+	for _, mc := range managed {
+		if mc.StackID == stackID {
+			subset = append(subset, mc)
+		}
+	}
+	return m.checkUpdates(ctx, subset), nil
+}
+
+// CheckAllUpdates re-checks every managed container on demand and reports how
+// many have an update available.
+func (m *Manager) CheckAllUpdates(ctx context.Context) (int, error) {
+	managed, err := m.st.AllManaged()
+	if err != nil {
+		return 0, err
+	}
+	return m.checkUpdates(ctx, managed), nil
+}
+
+// checkUpdates records the update-available flag for the given containers,
+// firing a notification for each that newly gained one (unless it auto-updates)
+// and broadcasting fresh stacks if anything changed. It returns the number of
+// the given containers that have an update available after the check.
+func (m *Manager) checkUpdates(ctx context.Context, managed []store.ManagedContainer) int {
 	m.seedUpdateAvail()
 	changed := false
+	available := 0
 	for _, mc := range managed {
 		if ctx.Err() != nil {
-			return
+			return available
 		}
 		avail := m.remoteHasNewImage(ctx, mc)
+		if avail {
+			available++
+		}
 		if was := m.updateAvailableFor(mc.ContainerName); was != avail {
 			changed = true
 			// Auto-updating containers are left alone: the update runs on its
@@ -60,6 +107,7 @@ func (m *Manager) CheckUpdates(ctx context.Context) {
 		m.persistUpdateAvail()
 		m.BroadcastStacks(ctx)
 	}
+	return available
 }
 
 // seedUpdateAvail loads the update-available flags recorded by the last sweep,

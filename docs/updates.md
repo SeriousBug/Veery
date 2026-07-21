@@ -1,5 +1,18 @@
 # Updates
 
+## Checking for updates
+
+`internal/docker/updatecheck.go` inspects each managed container's remote image digest without
+pulling and records an in-memory `updateAvailable` flag (`CheckUpdates`). `UpdateCheckPoller` runs
+this on the auto-update interval; the flags ride the WS stacks push.
+
+Users can also force a check instead of waiting for the poller. `checkUpdates` is the shared scoped
+sweep; `CheckContainerUpdates`/`CheckStackUpdates`/`CheckAllUpdates` scope it to one container, one
+stack, or everything, behind `POST /api/containers/{id}/check-update`, `POST /api/stacks/{id}/check-update`,
+and `POST /api/updates/check`. These run synchronously so the UI can await the result — the "Up to
+date" pill (`ActionBar`) and the dashboard "Check for updates" button trigger the matching scope. A
+newly found update still flips the UI via the same WS push, so a manual check and the poller converge.
+
 ## Transactional swap
 
 `internal/docker/update.go` pulls the image, and if the digest actually changed, swaps the container

@@ -1,7 +1,9 @@
-import { Boxes } from "lucide-react";
+import { useState } from "react";
+import { Boxes, RefreshCw, Loader2 } from "lucide-react";
 import { css } from "styled-system/css";
 import { flex, grid, hstack, vstack } from "styled-system/patterns";
 import { useLiveData } from "../live/LiveData";
+import { checkAllUpdates } from "../lib/actions";
 import { HostResources } from "../components/HostResources";
 import { MdadmHealth } from "../components/MdadmHealth";
 import { AttentionBand } from "../components/AttentionBand";
@@ -44,9 +46,12 @@ export function Dashboard() {
           <AttentionBand stacks={stacks} jobs={jobs} />
 
           <section className={vstack({ gap: "4", alignItems: "stretch" })}>
-            <div className={hstack({ gap: "2.5" })}>
-              <Boxes size={20} className={css({ color: "grape.500" })} />
-              <h2 className={css({ fontSize: "lg", fontWeight: "extrabold" })}>Services</h2>
+            <div className={hstack({ gap: "2.5", justify: "space-between" })}>
+              <div className={hstack({ gap: "2.5" })}>
+                <Boxes size={20} className={css({ color: "grape.500" })} />
+                <h2 className={css({ fontSize: "lg", fontWeight: "extrabold" })}>Services</h2>
+              </div>
+              {managed.length > 0 && <CheckAllButton />}
             </div>
             {managed.length === 0 ? (
               <p className={css({ color: "textMuted" })}>
@@ -70,6 +75,42 @@ export function Dashboard() {
         </>
       )}
     </div>
+  );
+}
+
+function CheckAllButton() {
+  const [checking, setChecking] = useState(false);
+  const run = () => {
+    setChecking(true);
+    void checkAllUpdates().finally(() => setChecking(false));
+  };
+  return (
+    <button
+      onClick={run}
+      disabled={checking}
+      className={hstack({
+        gap: "1.5",
+        px: "3.5",
+        py: "2",
+        borderRadius: "full",
+        bg: "ink.100",
+        color: "text",
+        fontWeight: "extrabold",
+        fontSize: "sm",
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        transition: "all 0.15s ease",
+        _hover: { bg: "ink.200" },
+        _disabled: { opacity: 0.6, cursor: "not-allowed" },
+      })}
+    >
+      {checking ? (
+        <Loader2 size={16} className={css({ animation: "spin 0.9s linear infinite" })} />
+      ) : (
+        <RefreshCw size={16} />
+      )}
+      {checking ? "Checking…" : "Check for updates"}
+    </button>
   );
 }
 
