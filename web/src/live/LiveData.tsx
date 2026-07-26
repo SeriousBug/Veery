@@ -88,7 +88,12 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<Map<string, JobProgress>>(new Map());
   const [loading, setLoading] = useState(true);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
-  const seenToasts = useRef<Set<string>>(new Set());
+  // Job ids with a live spinner toast, and job ids we have already reported the
+  // outcome of. The second set is never pruned on a jobs replay: the server
+  // re-sends finished updates for minutes, and a tab that reconnects repeatedly
+  // would otherwise raise the same "is updated" toast on every reconnect.
+  const spinners = useRef<Set<string>>(new Set());
+  const reported = useRef<Set<string>>(new Set());
   const stacksRef = useRef<Stack[]>([]);
 
   useEffect(() => {
@@ -98,6 +103,22 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     let offlineTimer = 0;
+
+    // Toast dismiss timers run on requestAnimationFrame, which browsers freeze
+    // in a background tab, so anything raised while the tab was hidden is still
+    // sitting there when the reader comes back — however long that is. Expire
+    // those on wall-clock time instead.
+    const expiries = new Map<string, number>();
+    const expireStale = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      for (const [id, at] of expiries) {
+        if (at > now) continue;
+        toaster.remove(id);
+        expiries.delete(id);
+      }
+    };
+    document.addEventListener("visibilitychange", expireStale);
 
     http
       .get<Stack[]>("/api/stacks")
@@ -134,10 +155,11 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
       // Anything we are still showing a spinner for, that the server does not
       // know about, is finished and gone. Without this it spins forever.
       const known = new Set(jobs.map((j) => j.id));
-      for (const id of seenToasts.current) {
-        if (!known.has(id)) toaster.remove(id);
+      for (const id of spinners.current) {
+        if (known.has(id)) continue;
+        toaster.remove(id);
+        spinners.current.delete(id);
       }
-      seenToasts.current = new Set(known);
     };
 
     const unsubs = [
@@ -184,14 +206,21 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
       const description = job.message || undefined;
       if (!job.done) {
         const opts = { title: loadingTitle(job, name), description, type: "loading" };
-        if (seenToasts.current.has(job.id)) {
-          toaster.update(job.id, opts);
-        } else {
-          seenToasts.current.add(job.id);
-          toaster.create({ id: job.id, duration: Number.POSITIVE_INFINITY, ...opts });
+        if (spinners.current.has(job.id)) {
+          // update() re-creates a toast that is no longer on screen, so only
+          // touch one we know is still up: a spinner the reader dismissed by
+          // hand should stay gone.
+          if (toaster.isVisible(job.id)) toaster.update(job.id, opts);
+          return;
         }
+        spinners.current.add(job.id);
+        toaster.create({ id: job.id, duration: Number.POSITIVE_INFINITY, ...opts });
         return;
       }
+
+      if (reported.current.has(job.id)) return;
+      reported.current.add(job.id);
+      const hadSpinner = spinners.current.delete(job.id);
 
       const done = job.error
         ? {
@@ -205,17 +234,18 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
             ...successToast(job, targetName(stacksRef.current, job.target)),
             duration: 4000,
           };
-      if (seenToasts.current.has(job.id)) {
+      if (hadSpinner && toaster.isVisible(job.id)) {
         toaster.update(job.id, done);
       } else {
-        seenToasts.current.add(job.id);
         toaster.create({ id: job.id, ...done });
       }
+      expiries.set(job.id, Date.now() + done.duration);
     }
 
     return () => {
       cancelled = true;
       window.clearTimeout(offlineTimer);
+      document.removeEventListener("visibilitychange", expireStale);
       for (const off of unsubs) off();
       wsClient.close();
     };
