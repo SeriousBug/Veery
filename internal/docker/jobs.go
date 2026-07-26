@@ -162,7 +162,7 @@ func (m *Manager) StopStack(ctx context.Context, stackID string) error {
 		return err
 	}
 	for _, id := range ids {
-		if err := m.cli.ContainerStop(ctx, id, container.StopOptions{}); err != nil {
+		if err := m.Stop(ctx, id); err != nil {
 			return err
 		}
 	}

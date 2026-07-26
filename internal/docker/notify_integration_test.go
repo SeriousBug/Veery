@@ -77,26 +77,16 @@ func TestIntegrationNotifiesOnContainerStop(t *testing.T) {
 	// Adoption itself is not news, and neither is a container that was already
 	// running when Veery first looked.
 	m.BroadcastStacks(ctx)
-	logContainers(t, m, ctx, "baseline sweep")
 	select {
 	case msg := <-delivered:
 		t.Fatalf("unexpected notification for a container that just sat there: %q", msg)
 	case <-time.After(500 * time.Millisecond):
 	}
 
-	stopStart := time.Now()
 	if err := m.Stop(ctx, created.ID); err != nil {
 		t.Fatalf("stop container: %v", err)
 	}
-	t.Logf("stop returned after %s", time.Since(stopStart))
-	if insp, err := m.cli.ContainerInspect(ctx, created.ID); err == nil {
-		t.Logf("inspect after stop: status=%q running=%v exit=%d finished=%s",
-			insp.State.Status, insp.State.Running, insp.State.ExitCode, insp.State.FinishedAt)
-	} else {
-		t.Logf("inspect after stop: %v", err)
-	}
 	m.BroadcastStacks(ctx)
-	logContainers(t, m, ctx, "sweep after stop")
 
 	select {
 	case msg := <-delivered:
@@ -105,30 +95,5 @@ func TestIntegrationNotifiesOnContainerStop(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("no notification arrived after the container stopped")
-	}
-}
-
-func logContainers(t *testing.T, m *Manager, ctx context.Context, when string) {
-	t.Helper()
-	summaries, err := m.cli.ContainerList(ctx, container.ListOptions{All: true})
-	if err != nil {
-		t.Logf("%s: container list: %v", when, err)
-		return
-	}
-	for _, c := range summaries {
-		name := containerName(c.Names)
-		if strings.HasPrefix(name, "veerynotifytest-") {
-			t.Logf("%s: %s summary state=%q status=%q", when, name, c.State, c.Status)
-		}
-	}
-	stacks, err := m.ListStacks(ctx)
-	if err != nil {
-		t.Logf("%s: list stacks: %v", when, err)
-		return
-	}
-	for _, st := range stacks {
-		for _, c := range st.Containers {
-			t.Logf("%s: %s state=%q status=%q managed=%v", when, c.ContainerName, c.State, c.Status, c.Managed)
-		}
 	}
 }
