@@ -293,10 +293,35 @@ func (m *Manager) Start(ctx context.Context, id string) error {
 	return m.cli.ContainerStart(ctx, id, container.StartOptions{})
 }
 
-// Stop stops a container.
+// Stop stops a container and waits for the daemon to report it as no longer
+// running.
 func (m *Manager) Stop(ctx context.Context, id string) error {
-	return m.cli.ContainerStop(ctx, id, container.StopOptions{})
+	if err := m.cli.ContainerStop(ctx, id, container.StopOptions{}); err != nil {
+		return err
+	}
+	return m.awaitNotRunning(ctx, id)
 }
+
+// awaitNotRunning blocks until the container is no longer running. ContainerStop
+// can return while the daemon still lists the container as running, so a sweep
+// right after a stop would read the old state and skip the status change.
+func (m *Manager) awaitNotRunning(ctx context.Context, id string) error {
+	ctx, cancel := context.WithTimeout(ctx, awaitStopTimeout)
+	defer cancel()
+	done, errs := m.cli.ContainerWait(ctx, id, container.WaitConditionNotRunning)
+	select {
+	case err := <-errs:
+		return err
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// awaitStopTimeout bounds the wait for a container to leave the running state
+// after it was told to stop, so a wedged container cannot hang a job forever.
+const awaitStopTimeout = 30 * time.Second
 
 // Restart restarts a container.
 func (m *Manager) Restart(ctx context.Context, id string) error {
