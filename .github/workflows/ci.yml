@@ -12,7 +12,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # There is no root package.json, so the pnpm version comes from web/.
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: web/package.json
