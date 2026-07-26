@@ -2,15 +2,50 @@ package raidwatch
 
 import (
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/teambition/rrule-go"
 )
 
+// LocalZone reports the timezone schedules are evaluated in: its IANA name, and
+// the current UTC offset in seconds. The UI needs both to tell the user when a
+// rule next fires in the server's terms rather than the browser's. The name is
+// empty when it cannot be determined, and the offset stands in for it.
+func LocalZone() (string, int) {
+	_, offset := time.Now().Zone()
+	return zoneName(), offset
+}
+
+func zoneName() string {
+	if tz := strings.TrimPrefix(strings.TrimSpace(os.Getenv("TZ")), ":"); tz != "" {
+		return tz
+	}
+	// Go names the zone "Local" when it was loaded from /etc/localtime, so the
+	// name has to come from whatever the distro points that at.
+	if name := time.Local.String(); name != "" && name != "Local" {
+		return name
+	}
+	if target, err := os.Readlink("/etc/localtime"); err == nil {
+		if i := strings.Index(target, "zoneinfo/"); i >= 0 {
+			return target[i+len("zoneinfo/"):]
+		}
+	}
+	if b, err := os.ReadFile("/etc/timezone"); err == nil {
+		if name := strings.TrimSpace(string(b)); name != "" {
+			return name
+		}
+	}
+	return ""
+}
+
 // scheduleAnchor is the DTSTART used for schedules whose RRULE carries none,
 // which is every rule the UI produces. It is fixed (not "now") so a rule like
 // FREQ=WEEKLY;INTERVAL=2 keeps the same week phase across restarts, and it is in
-// the local timezone so BYHOUR/BYMINUTE mean local wall-clock time.
+// the local timezone so BYHOUR/BYMINUTE mean local wall-clock time. The UI
+// previews the next run against the same anchor (SCHEDULE_ANCHOR in
+// web/src/lib/rrule.ts), so changing it here means changing it there too.
 var scheduleAnchor = time.Date(2020, 1, 1, 0, 0, 0, 0, time.Local)
 
 // parseRRule turns a bare RRULE string into an evaluatable rule anchored at

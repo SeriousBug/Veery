@@ -49,7 +49,9 @@ a builder for common cases (e.g. weekly on Sundays at 8PM → `FREQ=WEEKLY;BYDAY
 plus a raw RRULE field. Rules are validated with rrule-go before saving.
 
 Schedules are evaluated in the **server's local timezone**. Set the container's `TZ` (e.g.
-`TZ=America/New_York`) so "8PM" means 8PM where you are. A scheduled scrub, like a manual one, needs
+`TZ=America/New_York`) so "8PM" means 8PM where you are. `GET /api/mdadm/schedules` reports that
+zone (`timeZone`, with `timeZoneOffsetSeconds` as a fallback when the name cannot be determined) so
+the UI can name it and count down to the next run in the server's terms rather than the browser's. A scheduled scrub, like a manual one, needs
 `/sys` mounted **writable**; without it the scan-start write fails and is logged.
 
 ## Enabling it

@@ -252,6 +252,7 @@ func (s *Server) handleGetMdadmSchedules(w http.ResponseWriter, r *http.Request)
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	cfg.TimeZone, cfg.TimeZoneOffsetSeconds = raidwatch.LocalZone()
 	writeJSON(w, http.StatusOK, cfg)
 }
 
@@ -279,6 +280,7 @@ func (s *Server) handleSetMdadmSchedules(w http.ResponseWriter, r *http.Request)
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	cfg.TimeZone, cfg.TimeZoneOffsetSeconds = raidwatch.LocalZone()
 	writeJSON(w, http.StatusOK, cfg)
 }
 

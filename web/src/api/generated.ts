@@ -198,6 +198,20 @@ export interface MdadmSchedule {
  */
 export interface MdadmScheduleConfig {
   schedules: { [key: string]: MdadmSchedule};
+  /**
+   * TimeZone is the IANA name of the zone the server evaluates schedules in
+   * (e.g. "America/New_York"), so the UI can say when a rule next fires in the
+   * server's terms rather than the browser's. Server-reported: it is filled in
+   * on the way out and ignored on the way in. Empty when the name cannot be
+   * determined, in which case TimeZoneOffsetSeconds stands in for it.
+   */
+  timeZone: string;
+  /**
+   * TimeZoneOffsetSeconds is the server's current UTC offset. It is a fallback
+   * for a missing or unloadable TimeZone, so it does not follow a DST change
+   * falling between now and the next run.
+   */
+  timeZoneOffsetSeconds: number /* int */;
 }
 /**
  * MdMember is one member device of an array and whether it is up.

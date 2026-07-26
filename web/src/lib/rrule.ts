@@ -71,31 +71,75 @@ function withoutTime(bare: string): string {
     .join(";");
 }
 
-// nextRun returns when the rule next fires, evaluated in the browser's timezone.
-// The server evaluates it in its own TZ, so this can be off on a machine set to
-// a different one. Returns null when the rule is unparseable or never fires.
-export function nextRun(rule: string, from: Date = new Date()): Date | null {
+/**
+ * The zone the server evaluates schedules in, from `GET /api/mdadm/schedules`.
+ * The name is empty when the server could not determine it, and the offset then
+ * stands in for it.
+ */
+export interface ServerZone {
+  timeZone: string;
+  offsetSeconds: number;
+}
+
+// DTSTART the server uses for rules that carry none, mirroring scheduleAnchor in
+// internal/raidwatch/schedule.go. It has to match, or a rule with an INTERVAL
+// would be previewed on a different phase than it actually runs on.
+const SCHEDULE_ANCHOR = new Date(Date.UTC(2020, 0, 1));
+
+// nextRun returns the instant a rule next fires, evaluated in the server's
+// timezone rather than the browser's: the scrub runs on the server, so a browser
+// set to another zone still has to be told the right answer. The rule is walked
+// in naive wall-clock time, which is what rrule-go does in the server's
+// time.Local, and only the result is turned into an instant. Returns null when
+// the rule is unparseable or never fires again.
+export function nextRun(rule: string, zone: ServerZone, from: Date = new Date()): Date | null {
   const bare = stripPrefix(rule);
   if (!bare) return null;
   try {
-    // rrule works in UTC, so it is asked about a UTC-shifted "now" and the
-    // answer is shifted back, which keeps BYHOUR meaning the local hour.
-    const start = toUTC(from);
-    start.setUTCSeconds(0, 0);
-    const options = { ...RRule.parseString(bare), dtstart: start };
-    const next = new RRule(options).after(toUTC(from));
-    return next ? fromUTC(next) : null;
+    const options = RRule.parseString(bare);
+    if (!options.dtstart) options.dtstart = SCHEDULE_ANCHOR;
+    const wallNow = new Date(from.getTime() + offsetAt(zone, from) * 1000);
+    const next = new RRule(options).after(wallNow);
+    return next ? instantOf(next, zone) : null;
   } catch {
     return null;
   }
 }
 
-function toUTC(d: Date): Date {
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000);
+// offsetAt is the server zone's UTC offset in seconds at a given instant, which
+// is what makes the answer survive a DST change between now and the next run.
+function offsetAt(zone: ServerZone, at: Date): number {
+  if (!zone.timeZone) return zone.offsetSeconds;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: zone.timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).formatToParts(at);
+    const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+    const asUTC = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
+    return Math.round((asUTC - at.getTime()) / 60_000) * 60;
+  } catch {
+    return zone.offsetSeconds;
+  }
 }
 
-function fromUTC(d: Date): Date {
-  return new Date(d.getTime() + d.getTimezoneOffset() * 60_000);
+// instantOf turns a wall-clock time in the server's zone (held as if it were
+// UTC) into the instant it names. The offset that applies is the one at the
+// instant itself, so the first guess is refined once; a second pass settles the
+// case where the guess landed on the other side of a DST change.
+function instantOf(wall: Date, zone: ServerZone): Date {
+  let guess = new Date(wall.getTime() - offsetAt(zone, wall) * 1000);
+  for (let i = 0; i < 2; i++) {
+    const refined = new Date(wall.getTime() - offsetAt(zone, guess) * 1000);
+    if (refined.getTime() === guess.getTime()) break;
+    guess = refined;
+  }
+  return guess;
 }
 
 // formatUntil renders the wait until a future date, e.g. "in about 3 hours".
