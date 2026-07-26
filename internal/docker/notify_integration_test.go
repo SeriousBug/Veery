@@ -77,6 +77,7 @@ func TestIntegrationNotifiesOnContainerStop(t *testing.T) {
 	// Adoption itself is not news, and neither is a container that was already
 	// running when Veery first looked.
 	m.BroadcastStacks(ctx)
+	logContainers(t, m, ctx, "baseline sweep")
 	select {
 	case msg := <-delivered:
 		t.Fatalf("unexpected notification for a container that just sat there: %q", msg)
@@ -87,6 +88,7 @@ func TestIntegrationNotifiesOnContainerStop(t *testing.T) {
 		t.Fatalf("stop container: %v", err)
 	}
 	m.BroadcastStacks(ctx)
+	logContainers(t, m, ctx, "sweep after stop")
 
 	select {
 	case msg := <-delivered:
@@ -95,5 +97,19 @@ func TestIntegrationNotifiesOnContainerStop(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("no notification arrived after the container stopped")
+	}
+}
+
+func logContainers(t *testing.T, m *Manager, ctx context.Context, when string) {
+	t.Helper()
+	stacks, err := m.ListStacks(ctx)
+	if err != nil {
+		t.Logf("%s: list stacks: %v", when, err)
+		return
+	}
+	for _, st := range stacks {
+		for _, c := range st.Containers {
+			t.Logf("%s: %s state=%q status=%q managed=%v", when, c.ContainerName, c.State, c.Status, c.Managed)
+		}
 	}
 }
