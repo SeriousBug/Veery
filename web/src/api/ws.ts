@@ -50,13 +50,22 @@ export class WSClient {
   private open(): void {
     const socket = new WebSocket(this.url);
     this.socket = socket;
+    // A socket that is no longer the current one has been superseded (close()
+    // then connect() in quick succession); its late events must not drive
+    // status or spawn a second reconnect loop.
+    const stale = () => this.socket !== socket;
 
     socket.onopen = () => {
+      if (stale()) {
+        socket.close();
+        return;
+      }
       this.backoffMs = 500;
       this.emitStatus("open");
     };
 
     socket.onmessage = (event: MessageEvent<string>) => {
+      if (stale()) return;
       let msg: WSMessage;
       try {
         msg = JSON.parse(event.data) as WSMessage;
@@ -67,6 +76,7 @@ export class WSClient {
     };
 
     socket.onclose = () => {
+      if (stale()) return;
       this.socket = null;
       if (this.closedByUser) {
         this.emitStatus("closed");
@@ -128,6 +138,7 @@ export class WSClient {
     this.closedByUser = true;
     this.socket?.close();
     this.socket = null;
+    this.emitStatus("closed");
   }
 }
 
