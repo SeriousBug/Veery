@@ -88,8 +88,8 @@ func (w *Watcher) notify(ev api.NotificationEvent, title, body string) {
 
 // checkTransitions compares each array against the last sweep and notifies on
 // the changes worth a message. An array not yet in the baseline is newly seen
-// (first sweep ever, or an array just added), so it is only recorded — never
-// announced — matching how noteStatuses treats a newly seen container.
+// (first sweep ever, or an array just added), so it is only recorded, never
+// announced, matching how noteStatuses treats a newly seen container.
 func (w *Watcher) checkTransitions(arrays []api.MdArray, now time.Time) {
 	baseline, err := w.st.LoadMdadmBaseline()
 	if err != nil {

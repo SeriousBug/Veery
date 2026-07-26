@@ -28,11 +28,31 @@ export type FieldSpec = {
   colonPair?: boolean;
 };
 
+/**
+ * A single input standing in for several fields, for services that hand out one
+ * string containing all of them (Discord's webhook URL). The fields it covers
+ * stay the source of truth; the composite only splits into and rebuilds from
+ * them, and is hidden from the form when it cannot represent what is stored.
+ */
+export type CompositeSpec = {
+  label: string;
+  placeholder?: string;
+  hint?: string;
+  invalidHint: string;
+  /** Names of the fields this input fills; they are not shown separately. */
+  covers: string[];
+  /** Splits a pasted value, or returns null when it is not in the right shape. */
+  parse: (v: string) => Record<string, string> | null;
+  /** Rebuilds the input value, or "" when the fields are not all set. */
+  format: (values: Record<string, string>) => string;
+};
+
 export type ServiceSpec = {
   scheme: string;
   label: string;
   docs: string;
   fields: FieldSpec[];
+  composite?: CompositeSpec;
   /** Slots the service fixes to a literal, e.g. telegram's `@telegram` host. */
   constants?: Partial<Record<Slot, string>>;
   defaults?: Record<string, string>;
@@ -45,6 +65,24 @@ export const SERVICES: ServiceSpec[] = [
     scheme: "discord",
     label: "Discord",
     docs: DOCS("discord"),
+    composite: {
+      label: "Webhook URL",
+      placeholder: "https://discord.com/api/webhooks/123456789/abcXYZ",
+      hint: "From Discord: Edit Channel → Integrations → Webhooks → Copy Webhook URL.",
+      invalidHint: "That doesn't look like a Discord webhook URL.",
+      covers: ["id", "token"],
+      parse: (v) => {
+        const m = /^https?:\/\/(?:\w+\.)?discord(?:app)?\.com\/api\/webhooks\/(\d+)\/([^/?#\s]+)/i.exec(
+          v.trim(),
+        );
+        return m ? { id: m[1], token: m[2] } : null;
+      },
+      format: (values) => {
+        const id = (values.id ?? "").trim();
+        const token = (values.token ?? "").trim();
+        return id && token ? `https://discord.com/api/webhooks/${id}/${token}` : "";
+      },
+    },
     fields: [
       {
         name: "token",
@@ -696,7 +734,7 @@ function dec(v: string): string {
   }
 }
 
-// Hand-rolled instead of `new URL`, which lowercases the host — Slack and Teams
+// Hand-rolled instead of `new URL`, which lowercases the host, and Slack and Teams
 // carry case-sensitive tokens there.
 const URL_RE = /^([a-z][a-z0-9+.-]*):\/\/(?:([^:@/?#]*)(?::([^@/?#]*))?@)?([^/?#]*)(\/[^?#]*)?(?:\?([^#]*))?$/i;
 

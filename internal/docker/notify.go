@@ -28,8 +28,8 @@ func (m *Manager) notify(ev api.NotificationEvent, title, body string, meta ...a
 // an unadopted container is not something Veery promised to keep alive, and on
 // a busy host they would be pure noise.
 //
-// The previous sweep is persisted, so a container that is newly seen — because
-// this is the first sweep ever, or because it was just adopted — is only
+// The previous sweep is persisted, so a container that is newly seen (because
+// this is the first sweep ever, or because it was just adopted) is only
 // recorded, never announced.
 func (m *Manager) noteStatuses(stacks []api.Stack) {
 	m.statusMu.Lock()

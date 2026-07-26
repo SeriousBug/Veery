@@ -9,14 +9,14 @@ this on the auto-update interval; the flags ride the WS stacks push.
 Users can also force a check instead of waiting for the poller. `checkUpdates` is the shared scoped
 sweep; `CheckContainerUpdates`/`CheckStackUpdates`/`CheckAllUpdates` scope it to one container, one
 stack, or everything, behind `POST /api/containers/{id}/check-update`, `POST /api/stacks/{id}/check-update`,
-and `POST /api/updates/check`. These run synchronously so the UI can await the result — the "Up to
+and `POST /api/updates/check`. These run synchronously so the UI can await the result. The "Up to
 date" pill (`ActionBar`) and the dashboard "Check for updates" button trigger the matching scope. A
 newly found update still flips the UI via the same WS push, so a manual check and the poller converge.
 
 ## Transactional swap
 
 `internal/docker/update.go` pulls the image, and if the digest actually changed, swaps the container
-onto it. The old container is *parked* — renamed to `<name>__veery_old` and stopped, but kept — while
+onto it. The old container is *parked* (renamed to `<name>__veery_old` and stopped, but kept) while
 the new one is created and verified:
 
 - New container comes up healthy within `verifyTimeout` → the parked container is removed.
@@ -31,7 +31,7 @@ is a guarantee, not a best effort.
 ## Veery updating itself
 
 Veery cannot swap its own container in-process. Parking it means stopping it, and stopping it kills
-the process that would go on to create and verify the replacement — the container ends up parked, the
+the process that would go on to create and verify the replacement: the container ends up parked, the
 replacement never gets created, and Veery is down until someone renames it back by hand.
 
 So `handOff` (`selfupdate.go`) starts a detached helper container that runs `veery apply-update` and
@@ -48,7 +48,7 @@ performs the swap from outside. Points that are load-bearing:
 ## Recovery
 
 `Manager.Recover` (`recover.go`) runs at startup, before serving, and reconciles anything left
-half-done — a crash, a host reboot, or the handoff above.
+half-done: a crash, a host reboot, or the handoff above.
 
 It is driven off Docker state, not the DB, because Docker state is what survives a hard kill: a
 container parked under the `__veery_old` name means a swap was in progress, whatever the DB says. For
@@ -63,7 +63,7 @@ parked container as its rollback target, and reconciling underneath it would tea
 Update jobs are persisted (`store/update_jobs.go`) because the process that starts a self-update is
 never the process that finishes it. A client that connects gets the whole job picture (`WSTypeJobs`):
 the updates in flight, plus the ones that finished recently. Without the latter, an update that
-completes while the browser is disconnected — which is *every* self-update — leaves the UI spinning on
+completes while the browser is disconnected, which is *every* self-update, leaves the UI spinning on
 a job it never sees resolve.
 
 ## Testing

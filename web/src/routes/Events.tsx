@@ -117,7 +117,7 @@ export function Events() {
           Event log
         </h1>
         <p className={css({ color: "textMuted", mt: "1" })}>
-          Everything Veery has noticed, whether or not it was sent to a notification channel.
+          Everything Veery has noticed.
         </p>
       </div>
 
@@ -265,12 +265,13 @@ function EventRow({ event, stacks }: { event: LogEvent; stacks: Stack[] }) {
   };
   const Icon = meta.icon;
   const serviceId = resolveServiceId(event, stacks);
+  const [expanded, setExpanded] = useState(false);
+  const bodyRef = useRef<HTMLSpanElement>(null);
+  const truncated = useTruncated(bodyRef, event.body, expanded);
 
   return (
     <div
-      className={flex({
-        align: "center",
-        gap: "3",
+      className={css({
         px: "4",
         py: "2.5",
         borderBottomWidth: "1px",
@@ -280,78 +281,124 @@ function EventRow({ event, stacks }: { event: LogEvent; stacks: Stack[] }) {
         _last: { borderBottomWidth: "0" },
       })}
     >
-      <span
-        className={flex({
-          align: "center",
-          justify: "center",
-          w: "6",
-          h: "6",
-          borderRadius: "md",
-          bg: meta.bg,
-          color: meta.fg,
-          flexShrink: 0,
-        })}
-        title={meta.label}
-      >
-        <Icon size={14} />
-      </span>
-      <span
-        className={css({
-          fontWeight: "bold",
-          fontSize: "sm",
-          color: "text",
-          whiteSpace: "nowrap",
-          flexShrink: 0,
-        })}
-      >
-        {event.title}
-      </span>
-      {event.body && (
+      <div className={flex({ align: "center", gap: "3" })}>
+        <span
+          className={flex({
+            align: "center",
+            justify: "center",
+            w: "6",
+            h: "6",
+            borderRadius: "md",
+            bg: meta.bg,
+            color: meta.fg,
+            flexShrink: 0,
+          })}
+          title={meta.label}
+        >
+          <Icon size={14} />
+        </span>
         <span
           className={css({
-            flex: "1",
-            minW: "0",
+            fontWeight: "bold",
             fontSize: "sm",
-            color: "textMuted",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
+            color: "text",
             whiteSpace: "nowrap",
+            flexShrink: 0,
           })}
-          title={event.body}
         >
-          {event.body}
+          {event.title}
         </span>
-      )}
-      <span className={hstack({ gap: "3", ml: "auto", flexShrink: 0 })}>
-        {serviceId && (
-          <Link
-            to="/service/$id"
-            params={{ id: serviceId }}
+        {event.body && (
+          <span
+            ref={bodyRef}
+            onClick={() => truncated && setExpanded(true)}
             className={css({
-              fontSize: "xs",
-              fontWeight: "bold",
-              color: "grape.600",
-              textDecoration: "none",
-              maxW: "40",
+              flex: "1",
+              minW: "0",
+              fontSize: "sm",
+              color: "textMuted",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-              display: { base: "none", sm: "block" },
-              _hover: { textDecoration: "underline" },
+              visibility: expanded ? "hidden" : "visible",
+              cursor: truncated ? "pointer" : "default",
+              _hover: truncated ? { color: "text", textDecoration: "underline" } : {},
             })}
+            title={truncated ? "Click to show the whole message" : undefined}
           >
-            {event.containerName || serviceId}
-          </Link>
+            {event.body}
+          </span>
         )}
-        <time
-          className={css({ fontSize: "xs", color: "textMuted", w: "16", textAlign: "right" })}
-          dateTime={new Date(event.createdAt * 1000).toISOString()}
+        <span className={hstack({ gap: "3", ml: "auto", flexShrink: 0 })}>
+          {serviceId && (
+            <Link
+              to="/service/$id"
+              params={{ id: serviceId }}
+              className={css({
+                fontSize: "xs",
+                fontWeight: "bold",
+                color: "grape.600",
+                textDecoration: "none",
+                maxW: "40",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                display: { base: "none", sm: "block" },
+                _hover: { textDecoration: "underline" },
+              })}
+            >
+              {event.containerName || serviceId}
+            </Link>
+          )}
+          <time
+            className={css({ fontSize: "xs", color: "textMuted", w: "16", textAlign: "right" })}
+            dateTime={new Date(event.createdAt * 1000).toISOString()}
+          >
+            {formatTime(event.createdAt)}
+          </time>
+        </span>
+      </div>
+      {expanded && (
+        <p
+          onClick={() => setExpanded(false)}
+          title="Click to collapse"
+          className={css({
+            pl: "9",
+            pr: "4",
+            pb: "1",
+            fontSize: "sm",
+            color: "textMuted",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            cursor: "pointer",
+          })}
         >
-          {formatTime(event.createdAt)}
-        </time>
-      </span>
+          {event.body}
+        </p>
+      )}
     </div>
   );
+}
+
+// useTruncated reports whether the ellipsis is actually cutting text off, which
+// is the only way to know whether expanding would show anything more. It
+// re-measures on resize because the same text fits or not depending on width.
+function useTruncated(
+  ref: React.RefObject<HTMLElement | null>,
+  text: string,
+  expanded: boolean,
+): boolean {
+  const [truncated, setTruncated] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setTruncated(el.scrollWidth > el.clientWidth + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, text, expanded]);
+  return truncated;
 }
 
 /** Resolve the stack id a row links to: its own stackId, or the stack whose

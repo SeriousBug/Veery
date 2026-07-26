@@ -14,35 +14,37 @@ static Go binary with the web UI embedded (distroless/static base).
 
 ## Layout
 
-- `cmd/veery/` — main entrypoint. `veery invite [--normal]` mints a recovery enrollment link from
+- `cmd/veery/`: main entrypoint. `veery invite [--normal]` mints a recovery enrollment link from
   the host (full-lockout escape hatch). `veery apply-update --container X --job Y` is what the
   self-update helper container runs; it is not meant to be invoked by hand.
-- `internal/api/` — shared request/response types (`types.go`). **Source of truth for TS types.**
-- `internal/server/` — HTTP handlers, routing (`server.go`), auth middleware (`middleware.go`,
+- `internal/api/`: shared request/response types (`types.go`). **Source of truth for TS types.**
+- `internal/server/`: HTTP handlers, routing (`server.go`), auth middleware (`middleware.go`,
   `requireAuth`/`requireAdmin`), auth handlers (`auth_handlers.go`).
-- `internal/auth/` — WebAuthn, invites, sessions, users.
-- `internal/store/` — SQLite persistence (`accessors.go`).
-- `internal/docker/`, `internal/metrics/` — container management and host/container metrics.
-  Updates are transactional and Veery updates itself via a helper container — see `docs/updates.md`.
+- `internal/auth/`: WebAuthn, invites, sessions, users.
+- `internal/store/`: SQLite persistence (`accessors.go`).
+- `internal/docker/`, `internal/metrics/`: container management and host/container metrics.
+  Updates are transactional and Veery updates itself via a helper container, see `docs/updates.md`.
   Containers are the user's to create and edit (Veery only adopts them), so `reconcile.go` picks up
-  what they change behind Veery's back — see `docs/reconcile.md`. Optional mdadm (Linux software
+  what they change behind Veery's back, see `docs/reconcile.md`. Optional mdadm (Linux software
   RAID) health reads `${HOST_PROC}/mdstat` + `${HOST_SYS}/block/*/md/` (`mdadm.go`, no `mdadm`
   binary); enable by mounting host `/proc` and `/sys` and setting `HOST_PROC`/`HOST_SYS` (same
-  mounts host metrics need); starting a scan needs `/sys` mounted **writable** — see `docs/mdadm.md`.
-- `internal/raidwatch/` — stateful mdadm poller on top of `ScanMdadm`: edge-triggered RAID alerts
+  mounts host metrics need); starting a scan needs `/sys` mounted **writable**, see `docs/mdadm.md`.
+- `internal/raidwatch/`: stateful mdadm poller on top of `ScanMdadm`: edge-triggered RAID alerts
   (`raid_scan_started`/`raid_scan_finished`/`raid_unhealthy`/`raid_disk_offline`), the Veery-tracked
   last-scan time (`MdArray.LastScanAt`), and per-array scheduled scrubs from iCal RRULE strings
-  (rrule-go), evaluated in the server's `TZ` — see `docs/mdadm.md`.
-- `internal/notify/` — notifications via Shoutrrr service URLs (Discord, ntfy, Slack, webhooks, ...).
+  (rrule-go), evaluated in the server's `TZ`, see `docs/mdadm.md`.
+- `internal/notify/`: notifications via Shoutrrr service URLs (Discord, ntfy, Slack, webhooks, ...).
   Config comes from `VEERY_NOTIFY_URLS`/`VEERY_NOTIFY_EVENTS` or, unset, from the DB and the UI.
+  Each target picks its own events (`api.NotificationTarget`); the env vars apply one event list to
+  every target.
   Targets hold webhook tokens, so the routes are `requireAdmin` and URLs are redacted in logs.
   `Notify` also records every event to the `events` table (`store/events.go`) whether or not it is
   delivered, and broadcasts a `WSTypeEvent` to admin WS clients. The admin-only event log
-  (`GET /api/events`, cursor-paginated, `web/src/routes/Events.tsx`) is that searchable history —
+  (`GET /api/events`, cursor-paginated, `web/src/routes/Events.tsx`) is that searchable history,
   see `docs/events.md`.
-- `web/src/routes/` — page components. `web/src/api/http.ts` — fetch wrapper (`http.get/post/put/del`).
-  `web/src/auth/AuthProvider.tsx` — `useAuth()` gives the current `user`.
-- `web/embed.go` — embeds `web/dist` into the Go binary via `//go:embed`.
+- `web/src/routes/`: page components. `web/src/api/http.ts`: fetch wrapper (`http.get/post/put/del`).
+  `web/src/auth/AuthProvider.tsx`: `useAuth()` gives the current `user`.
+- `web/embed.go`: embeds `web/dist` into the Go binary via `//go:embed`.
 
 ## Type generation
 

@@ -30,9 +30,6 @@ export function Dashboard() {
         >
           Your services
         </h1>
-        <p className={css({ color: "textMuted", mt: "1" })}>
-          Everything running on this machine, at a glance.
-        </p>
       </div>
 
       <HostResources />
@@ -55,7 +52,7 @@ export function Dashboard() {
             </div>
             {managed.length === 0 ? (
               <p className={css({ color: "textMuted" })}>
-                Nothing set up yet — add one of the services found below.
+                Nothing set up yet. Add one of the services found below.
               </p>
             ) : (
               <div className={grid({ columns: { base: 1, lg: 2 }, gap: "5" })}>

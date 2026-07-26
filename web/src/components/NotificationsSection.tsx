@@ -4,67 +4,27 @@ import { css } from "styled-system/css";
 import { hstack, vstack } from "styled-system/patterns";
 import { http, HttpError } from "../api/http";
 import { toaster } from "../lib/toaster";
-import { ToggleField } from "./ToggleField";
 import { NotificationTarget } from "./NotificationTarget";
 import { buildURL, isComplete, newTarget, parseURL, type Target } from "../lib/shoutrrr";
-import type { NotificationConfig, NotificationEvent } from "../api/generated";
+import type {
+  NotificationConfig,
+  NotificationEvent,
+  NotificationTarget as TargetConfig,
+} from "../api/generated";
 
-const EVENTS: { event: NotificationEvent; title: string; hint: string }[] = [
-  {
-    event: "container_status",
-    title: "Service problems",
-    hint: "A service you manage crashes, goes unhealthy, stops, or comes back up.",
-  },
-  {
-    event: "container_missing",
-    title: "Services removed",
-    hint: "A container you manage is removed from this machine. Usually that's you, taking it down or editing your compose file — turn this off if you change things often.",
-  },
-  {
-    event: "container_adopted",
-    title: "New services picked up",
-    hint: "A container appears in a service Veery already manages, so Veery starts watching it too.",
-  },
-  {
-    event: "update_applied",
-    title: "Update results",
-    hint: "An update finished, or failed and was rolled back.",
-  },
-  {
-    event: "update_available",
-    title: "Updates you can install",
-    hint: "A newer version is out for a service that doesn't update itself.",
-  },
-  {
-    event: "auth",
-    title: "Sign-ins and passkeys",
-    hint: "Someone signs in, or a new passkey is enrolled.",
-  },
-  {
-    event: "raid_unhealthy",
-    title: "RAID unhealthy",
-    hint: "A RAID array goes degraded or failed, and again when it recovers.",
-  },
-  {
-    event: "raid_disk_offline",
-    title: "RAID disk offline",
-    hint: "A member disk drops out of a RAID array, and again when it comes back.",
-  },
-  {
-    event: "raid_scan_started",
-    title: "RAID scan started",
-    hint: "A data-scrub starts on a RAID array — scheduled, from a host cron, or run by hand.",
-  },
-  {
-    event: "raid_scan_finished",
-    title: "RAID scan finished",
-    hint: "A data-scrub finishes and the array returns to idle.",
-  },
-];
+/** A target being edited: its address form plus the events it subscribes to. */
+interface Row {
+  target: Target;
+  events: Partial<Record<NotificationEvent, boolean>>;
+}
+
+function rowFrom(t: TargetConfig): Row {
+  return { target: parseURL(t.url), events: t.events ?? {} };
+}
 
 export function NotificationsSection() {
   const [cfg, setCfg] = useState<NotificationConfig | null>(null);
-  const [targets, setTargets] = useState<Target[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -76,7 +36,7 @@ export function NotificationsSection() {
       .then((data) => {
         if (cancelled) return;
         setCfg(data);
-        setTargets(data.urls.map(parseURL));
+        setRows(data.targets.map(rowFrom));
       })
       .catch((err) => {
         if (!cancelled)
@@ -87,30 +47,26 @@ export function NotificationsSection() {
     };
   }, []);
 
-  const complete = targets.filter(isComplete);
-  const urls = complete.map(buildURL);
-  const incomplete = targets.length - complete.length;
+  const complete = rows.filter((r) => isComplete(r.target));
+  const urls = complete.map((r) => buildURL(r.target));
+  const incomplete = rows.length - complete.length;
   const locked = cfg?.envManaged ?? false;
 
-  function setEvent(event: NotificationEvent, on: boolean) {
-    if (!cfg) return;
-    setCfg({ ...cfg, events: { ...cfg.events, [event]: on } });
-  }
-
-  function updateTarget(t: Target) {
-    setTargets((ts) => ts.map((old) => (old.id === t.id ? t : old)));
+  function updateRow(id: string, patch: Partial<Row>) {
+    setRows((rs) => rs.map((r) => (r.target.id === id ? { ...r, ...patch } : r)));
   }
 
   async function save() {
     if (!cfg) return;
     setSaving(true);
     try {
-      const saved = await http.put<NotificationConfig>("/api/notifications", {
-        urls,
-        events: cfg.events,
-      });
+      const targets: TargetConfig[] = complete.map((r) => ({
+        url: buildURL(r.target),
+        events: r.events as TargetConfig["events"],
+      }));
+      const saved = await http.put<NotificationConfig>("/api/notifications", { targets });
       setCfg(saved);
-      setTargets(saved.urls.map(parseURL));
+      setRows(saved.targets.map(rowFrom));
       toaster.create({ type: "success", title: "Notifications saved", duration: 3000 });
     } catch (err) {
       toaster.create({
@@ -165,9 +121,6 @@ export function NotificationsSection() {
           <Bell size={18} className={css({ color: "sunshine.500" })} />
           <span className={css({ fontWeight: "extrabold", fontSize: "md" })}>Notifications</span>
         </span>
-        <span className={css({ fontSize: "sm", color: "textMuted" })}>
-          Tell Veery where to reach you when something happens.
-        </span>
       </div>
 
       {loadError ? (
@@ -200,29 +153,31 @@ export function NotificationsSection() {
           <div className={vstack({ gap: "3", alignItems: "stretch" })}>
             <span className={css({ fontWeight: "extrabold", fontSize: "md" })}>Where to send them</span>
             <span className={css({ fontSize: "sm", color: "textMuted" })}>
-              Pick a service and fill in what it needs. Fields marked{" "}
-              <span className={css({ color: "coral.600", fontWeight: "bold" })}>*</span> are required.
+              Fields marked <span className={css({ color: "coral.600", fontWeight: "bold" })}>*</span>{" "}
+              are required.
             </span>
 
-            {targets.length === 0 && (
+            {rows.length === 0 && (
               <span className={css({ fontSize: "sm", color: "textMuted" })}>
                 No places to send to yet.
               </span>
             )}
 
-            {targets.map((t) => (
+            {rows.map((r) => (
               <NotificationTarget
-                key={t.id}
-                target={t}
+                key={r.target.id}
+                target={r.target}
+                events={r.events}
                 disabled={locked}
-                onChange={updateTarget}
-                onRemove={() => setTargets((ts) => ts.filter((old) => old.id !== t.id))}
+                onChange={(target) => updateRow(r.target.id, { target })}
+                onEventsChange={(events) => updateRow(r.target.id, { events })}
+                onRemove={() => setRows((rs) => rs.filter((old) => old.target.id !== r.target.id))}
               />
             ))}
 
             {!locked && (
               <button
-                onClick={() => setTargets((ts) => [...ts, newTarget("discord")])}
+                onClick={() => setRows((rs) => [...rs, { target: newTarget("discord"), events: {} }])}
                 className={hstack({
                   gap: "2",
                   alignSelf: "flex-start",
@@ -244,20 +199,6 @@ export function NotificationsSection() {
                 Add a place
               </button>
             )}
-          </div>
-
-          <div className={vstack({ gap: "4", alignItems: "stretch" })}>
-            <span className={css({ fontWeight: "extrabold", fontSize: "md" })}>What to tell you about</span>
-            {EVENTS.map(({ event, title, hint }) => (
-              <ToggleField
-                key={event}
-                title={title}
-                hint={hint}
-                disabled={locked}
-                checked={cfg.events[event] ?? true}
-                onChange={(on) => setEvent(event, on)}
-              />
-            ))}
           </div>
 
           <div className={hstack({ gap: "3", flexWrap: "wrap", alignItems: "center" })}>

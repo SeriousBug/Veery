@@ -36,7 +36,7 @@ export function AttentionBand({
             All good!
           </h2>
           <p className={css({ color: "ink.800", fontWeight: "medium" })}>
-            Every service is running happily. Nothing needs your attention.
+            Every service is running happily.
           </p>
         </div>
       </section>
@@ -67,7 +67,7 @@ export function AttentionBand({
         {problems.map((stack) => {
           const busy = stackBusy(stack, jobs);
           // A stack with any missing container aggregates to needs_attention,
-          // but Restart can't recreate a removed container — bringup can.
+          // but Restart can't recreate a removed container, and bringup can.
           const bringUp = stackNeedsBringUp(stack);
           return (
             <div

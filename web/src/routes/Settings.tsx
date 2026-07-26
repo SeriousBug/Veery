@@ -70,9 +70,6 @@ export function Settings() {
         <h1 className={css({ fontSize: "3xl", fontWeight: "extrabold", letterSpacing: "-0.02em" })}>
           Settings
         </h1>
-        <p className={css({ color: "textMuted", mt: "1" })}>
-          Tune how often Veery checks in and how updates are handled.
-        </p>
       </div>
 
       {loadError ? (
@@ -419,9 +416,6 @@ function PasskeysSection() {
           <span className={css({ fontWeight: "extrabold", fontSize: "md" })}>
             Your devices
           </span>
-        </span>
-        <span className={css({ fontSize: "sm", color: "textMuted" })}>
-          Add your other phone or a backup key so you never get locked out.
         </span>
       </div>
 

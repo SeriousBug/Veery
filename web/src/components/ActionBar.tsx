@@ -208,7 +208,7 @@ export function ActionBar({
         open={confirmStop}
         onOpenChange={setConfirmStop}
         title={`Stop ${name}?`}
-        description={`${name} will shut down and stop responding until you start it again. Nothing is deleted — you can start it back up any time.`}
+        description={`${name} will shut down and stop responding until you start it again. Nothing is deleted, you can start it back up any time.`}
         confirmLabel="Yes, stop it"
         tone="danger"
         onConfirm={handlers.onStop}

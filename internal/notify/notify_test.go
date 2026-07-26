@@ -94,20 +94,19 @@ func TestValidateRejectsUnknownService(t *testing.T) {
 }
 
 func TestEnvEventsSelectsOnlyTheListedEvents(t *testing.T) {
-	events := envEvents("auth, update_applied")
-	cfg := api.NotificationConfig{Events: events}
-	if !cfg.Enabled(api.EventAuth) || !cfg.Enabled(api.EventUpdateApplied) {
+	target := api.NotificationTarget{Events: envEvents("auth, update_applied")}
+	if !target.Enabled(api.EventAuth) || !target.Enabled(api.EventUpdateApplied) {
 		t.Error("listed events should be enabled")
 	}
-	if cfg.Enabled(api.EventContainerStatus) || cfg.Enabled(api.EventUpdateAvailable) {
+	if target.Enabled(api.EventContainerStatus) || target.Enabled(api.EventUpdateAvailable) {
 		t.Error("unlisted events should be disabled")
 	}
 }
 
 func TestEmptyEnvEventsEnablesEverything(t *testing.T) {
-	cfg := api.NotificationConfig{Events: envEvents("")}
+	target := api.NotificationTarget{Events: envEvents("")}
 	for _, ev := range api.AllNotificationEvents {
-		if !cfg.Enabled(ev) {
+		if !target.Enabled(ev) {
 			t.Errorf("%s should be enabled when no event list is given", ev)
 		}
 	}
@@ -123,8 +122,8 @@ func TestEnvConfigWins(t *testing.T) {
 	if !cfg.EnvManaged {
 		t.Error("config from the environment should be marked env-managed")
 	}
-	if len(cfg.URLs) != 2 {
-		t.Fatalf("URLs = %v, want 2 entries", cfg.URLs)
+	if len(cfg.Targets) != 2 {
+		t.Fatalf("Targets = %v, want 2 entries", cfg.Targets)
 	}
 	if err := n.Save(api.NotificationConfig{}); err != ErrEnvManaged {
 		t.Errorf("Save into an env-managed config = %v, want ErrEnvManaged", err)
@@ -146,7 +145,7 @@ func TestNotifyRecordsEvenWhenMuted(t *testing.T) {
 
 	// No URLs configured and the event muted: nothing is delivered, but it is
 	// still recorded and broadcast.
-	if err := n.Save(api.NotificationConfig{Events: map[api.NotificationEvent]bool{api.EventContainerMissing: false}}); err != nil {
+	if err := n.Save(api.NotificationConfig{}); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
 	n.Notify(api.EventContainerMissing, "web was removed", "it is gone",

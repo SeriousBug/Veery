@@ -194,7 +194,7 @@ func buildAndPush(t *testing.T, repoRoot, ref, marker string) {
 	run(t, "docker", "push", ref)
 }
 
-// seedDB builds Veery's database on the host — where SQLite works — with its own
+// seedDB builds Veery's database on the host, where SQLite works, with its own
 // container adopted and auto-update armed, then copies it into the data volume.
 // The container must already exist (adoption snapshots it) but must not be
 // running (nothing else may have the database open).

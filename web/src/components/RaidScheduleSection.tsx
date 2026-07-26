@@ -10,10 +10,13 @@ import {
   buildRRule,
   defaultBuilder,
   describeRRule,
+  formatUntil,
+  nextRun,
   parseBuilder,
   WEEKDAYS,
   type Builder,
   type Freq,
+  type ServerZone,
 } from "../lib/rrule";
 import type { MdadmScheduleConfig, MdadmSchedule } from "../api/generated";
 
@@ -37,6 +40,23 @@ function formFromSchedule(sc: MdadmSchedule | undefined): Form {
   };
 }
 
+// The zone used until the server reports its own, so a first render before the
+// config lands is not wildly wrong on a machine sharing the server's timezone.
+const browserZone: ServerZone = {
+  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? "",
+  offsetSeconds: -new Date().getTimezoneOffset() * 60,
+};
+
+function zoneOf(cfg: MdadmScheduleConfig): ServerZone {
+  return { timeZone: cfg.timeZone ?? "", offsetSeconds: cfg.timeZoneOffsetSeconds ?? 0 };
+}
+
+// foreignZone reports whether the server runs on a different clock than this
+// browser, which is when the schedule's wall-clock time needs naming.
+function foreignZone(zone: ServerZone): boolean {
+  return zone.timeZone !== "" && zone.timeZone !== browserZone.timeZone;
+}
+
 // ruleOf is the effective RRULE a form will save.
 function ruleOf(f: Form): string {
   return f.useRaw ? f.raw.trim() : buildRRule(f.builder);
@@ -46,6 +66,7 @@ export function RaidScheduleSection() {
   const { metrics } = useLiveData();
   const arrays = metrics?.host.mdadm;
   const [forms, setForms] = useState<Record<string, Form>>({});
+  const [zone, setZone] = useState<ServerZone>(browserZone);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -60,6 +81,7 @@ export function RaidScheduleSection() {
           next[name] = formFromSchedule(sc);
         }
         setForms(next);
+        setZone(zoneOf(cfg));
         setLoaded(true);
       })
       .catch(() => {
@@ -104,6 +126,7 @@ export function RaidScheduleSection() {
         next[name] = formFromSchedule(sc);
       }
       setForms(next);
+      setZone(zoneOf(cfg));
       toaster.create({ type: "success", title: "Scan schedules saved", duration: 3000 });
     } catch (err) {
       toaster.create({
@@ -147,6 +170,7 @@ export function RaidScheduleSection() {
             name={a.name}
             level={a.level}
             form={formFor(a.name)}
+            zone={zone}
             onChange={(patch) => update(a.name, patch)}
           />
         ))}
@@ -184,15 +208,18 @@ function ArrayScheduleRow({
   name,
   level,
   form,
+  zone,
   onChange,
 }: {
   name: string;
   level: string;
   form: Form;
+  zone: ServerZone;
   onChange: (patch: Partial<Form>) => void;
 }) {
   const rule = ruleOf(form);
   const description = describeRRule(rule);
+  const next = form.enabled ? nextRun(rule, zone) : null;
 
   return (
     <div
@@ -207,7 +234,7 @@ function ArrayScheduleRow({
     >
       <ToggleField
         title={name}
-        hint={`${level} — scrub on a schedule`}
+        hint={`${level}, scrub on a schedule`}
         checked={form.enabled}
         onChange={(enabled) => onChange({ enabled })}
       />
@@ -222,7 +249,11 @@ function ArrayScheduleRow({
 
           <div className={hstack({ justify: "space-between", gap: "3", flexWrap: "wrap" })}>
             <span className={css({ fontSize: "sm", color: description ? "textMuted" : "coral.500" })}>
-              {description ? `Runs ${description}` : "Invalid schedule"}
+              {description
+                ? `Runs ${description}${foreignZone(zone) ? ` ${zone.timeZone}` : ""}${
+                    next ? `. Next run ${formatUntil(next)}.` : ""
+                  }`
+                : "Invalid schedule"}
             </span>
             <button
               type="button"

@@ -40,7 +40,7 @@ func main() {
 
 	// Recovery: `veery invite [--admin]` mints a fresh enrollment link from the
 	// host and exits. This is the account-recovery path if every passkey is
-	// lost — host access already equals full control via the Docker socket.
+	// lost; host access already equals full control via the Docker socket.
 	if len(os.Args) > 1 && os.Args[1] == "invite" {
 		isAdmin := true
 		for _, a := range os.Args[2:] {
@@ -79,7 +79,7 @@ func main() {
 	if url, err := auth.Bootstrap(st, origin); err != nil {
 		log.Fatalf("bootstrap: %v", err)
 	} else if url != "" {
-		log.Printf("no users yet — enroll the first admin passkey here:\n\n    %s\n", url)
+		log.Printf("no users yet, enroll the first admin passkey here:\n\n    %s\n", url)
 	}
 
 	srv := server.New(st, authMgr, server.Config{

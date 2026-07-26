@@ -33,7 +33,7 @@ export function Login() {
       if (err instanceof DOMException && err.name === "NotAllowedError") {
         setError("That was cancelled. Give it another try when you're ready.");
       } else if (err instanceof HttpError && err.status >= 400 && err.status < 500) {
-        setError("No passkey found — ask an admin for an invite.");
+        setError("No passkey found. Ask an admin for an invite.");
       } else {
         setError("Something went wrong signing in. Please try again.");
       }

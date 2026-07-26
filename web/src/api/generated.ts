@@ -198,6 +198,20 @@ export interface MdadmSchedule {
  */
 export interface MdadmScheduleConfig {
   schedules: { [key: string]: MdadmSchedule};
+  /**
+   * TimeZone is the IANA name of the zone the server evaluates schedules in
+   * (e.g. "America/New_York"), so the UI can say when a rule next fires in the
+   * server's terms rather than the browser's. Server-reported: it is filled in
+   * on the way out and ignored on the way in. Empty when the name cannot be
+   * determined, in which case TimeZoneOffsetSeconds stands in for it.
+   */
+  timeZone: string;
+  /**
+   * TimeZoneOffsetSeconds is the server's current UTC offset. It is a fallback
+   * for a missing or unloadable TimeZone, so it does not follow a DST change
+   * falling between now and the next run.
+   */
+  timeZoneOffsetSeconds: number /* int */;
 }
 /**
  * MdMember is one member device of an array and whether it is up.
@@ -364,8 +378,8 @@ export const EventContainerAdopted: NotificationEvent = "container_adopted";
 export const EventAuth: NotificationEvent = "auth";
 /**
  * EventRaidScanStarted fires when a data-scrub (check) begins on a RAID
- * array, whoever started it — Veery's scheduler, a host cron, or a manual
- * mdadm command — since it is detected as a state transition.
+ * array, whoever started it (Veery's scheduler, a host cron, or a manual
+ * mdadm command), since it is detected as a state transition.
  */
 export const EventRaidScanStarted: NotificationEvent = "raid_scan_started";
 /**
@@ -421,20 +435,26 @@ export interface EventPage {
   nextCursor: string;
 }
 /**
- * NotificationConfig is where notifications go and which events are sent.
+ * NotificationTarget is one place notifications go, and which events it wants.
  */
-export interface NotificationConfig {
+export interface NotificationTarget {
   /**
-   * URLs are Shoutrrr service URLs, one per target, e.g.
-   * "discord://token@channel" or "ntfy://ntfy.sh/my-topic". They carry
-   * credentials, so this config is admin-only.
+   * URL is a Shoutrrr service URL, e.g. "discord://token@channel" or
+   * "ntfy://ntfy.sh/my-topic". It carries credentials, so this config is
+   * admin-only.
    */
-  urls: string[];
+  url: string;
   /**
-   * Events maps each NotificationEvent to whether it is delivered. Events
-   * absent from the map are treated as enabled.
+   * Events maps each NotificationEvent to whether it is delivered to this
+   * target. Events absent from the map are treated as enabled.
    */
   events: { [key: NotificationEvent]: boolean};
+}
+/**
+ * NotificationConfig is where notifications go and which events each target gets.
+ */
+export interface NotificationConfig {
+  targets: NotificationTarget[];
   /**
    * EnvManaged reports that the config comes from VEERY_NOTIFY_URLS and so
    * cannot be edited through the UI.
