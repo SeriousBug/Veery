@@ -4,7 +4,6 @@ import {
   createRouter,
   Outlet,
 } from "@tanstack/react-router";
-import type { ComponentType } from "react";
 import { AppShell } from "./components/AppShell";
 import { AuthProvider } from "./auth/AuthProvider";
 import { RequireAuth } from "./auth/RequireAuth";
@@ -16,18 +15,6 @@ import { Invites } from "./routes/Invites";
 import { Events } from "./routes/Events";
 import { ServiceDetail } from "./routes/ServiceDetail";
 
-function protectedPage<P extends object>(Page: ComponentType<P>) {
-  return function Guarded(props: P) {
-    return (
-      <RequireAuth>
-        <AppShell>
-          <Page {...props} />
-        </AppShell>
-      </RequireAuth>
-    );
-  };
-}
-
 const rootRoute = createRootRoute({
   component: () => (
     <AuthProvider>
@@ -36,11 +23,24 @@ const rootRoute = createRootRoute({
   ),
 });
 
-const ProtectedDashboard = protectedPage(Dashboard);
-const indexRoute = createRoute({
+// Pathless layout route: the shell (and with it the push-stream connection in
+// LiveDataProvider) stays mounted across navigations between protected pages.
+const protectedLayout = createRoute({
   getParentRoute: () => rootRoute,
+  id: "protected",
+  component: () => (
+    <RequireAuth>
+      <AppShell>
+        <Outlet />
+      </AppShell>
+    </RequireAuth>
+  ),
+});
+
+const indexRoute = createRoute({
+  getParentRoute: () => protectedLayout,
   path: "/",
-  component: ProtectedDashboard,
+  component: Dashboard,
 });
 
 const loginRoute = createRoute({
@@ -61,45 +61,43 @@ const enrollRoute = createRoute({
   },
 });
 
-const ProtectedSettings = protectedPage(Settings);
 const settingsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => protectedLayout,
   path: "/settings",
-  component: ProtectedSettings,
+  component: Settings,
 });
 
-const ProtectedInvites = protectedPage(Invites);
 const invitesRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => protectedLayout,
   path: "/invites",
-  component: ProtectedInvites,
+  component: Invites,
 });
 
-const ProtectedEvents = protectedPage(Events);
 const eventsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => protectedLayout,
   path: "/events",
-  component: ProtectedEvents,
+  component: Events,
 });
 
-const ProtectedServiceDetail = protectedPage(ServiceDetail);
 const serviceRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => protectedLayout,
   path: "/service/$id",
   component: function ServiceRoute() {
     const { id } = serviceRoute.useParams();
-    return <ProtectedServiceDetail id={id} />;
+    return <ServiceDetail id={id} />;
   },
 });
 
 const routeTree = rootRoute.addChildren([
-  indexRoute,
+  protectedLayout.addChildren([
+    indexRoute,
+    settingsRoute,
+    invitesRoute,
+    eventsRoute,
+    serviceRoute,
+  ]),
   loginRoute,
   enrollRoute,
-  settingsRoute,
-  invitesRoute,
-  eventsRoute,
-  serviceRoute,
 ]);
 
 export const router = createRouter({ routeTree });
