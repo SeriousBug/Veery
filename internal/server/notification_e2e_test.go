@@ -84,14 +84,16 @@ func TestNotificationConfigE2E(t *testing.T) {
 
 	// A garbage URL must be refused rather than silently stored and never sent.
 	if resp, _ := put(t, admin, ts.URL+"/api/notifications", api.NotificationConfig{
-		URLs: []string{"carrier-pigeon://roost"},
+		Targets: []api.NotificationTarget{{URL: "carrier-pigeon://roost"}},
 	}); resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("PUT with an unknown service = %d, want 400", resp.StatusCode)
 	}
 
 	resp, body := put(t, admin, ts.URL+"/api/notifications", api.NotificationConfig{
-		URLs:   []string{target},
-		Events: map[api.NotificationEvent]bool{api.EventUpdateAvailable: false},
+		Targets: []api.NotificationTarget{{
+			URL:    target,
+			Events: map[api.NotificationEvent]bool{api.EventUpdateAvailable: false},
+		}},
 	})
 	if resp.StatusCode != 200 {
 		t.Fatalf("PUT /api/notifications: %d %s", resp.StatusCode, body)
@@ -102,13 +104,13 @@ func TestNotificationConfigE2E(t *testing.T) {
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("decode config: %v (%s)", err, body)
 	}
-	if len(got.URLs) != 1 || got.URLs[0] != target {
-		t.Errorf("URLs = %v, want the saved target", got.URLs)
+	if len(got.Targets) != 1 || got.Targets[0].URL != target {
+		t.Errorf("Targets = %v, want the saved target", got.Targets)
 	}
-	if got.Enabled(api.EventUpdateAvailable) {
+	if got.Targets[0].Enabled(api.EventUpdateAvailable) {
 		t.Error("update_available should have been switched off")
 	}
-	if !got.Enabled(api.EventAuth) {
+	if !got.Targets[0].Enabled(api.EventAuth) {
 		t.Error("events left out of the map should stay enabled")
 	}
 	if got.EnvManaged {
@@ -142,7 +144,7 @@ func TestNotificationConfigE2E(t *testing.T) {
 	if resp, _ = getReq(t, member, ts.URL+"/api/notifications"); resp.StatusCode != http.StatusForbidden {
 		t.Errorf("GET /api/notifications as a non-admin = %d, want 403", resp.StatusCode)
 	}
-	if resp, _ = put(t, member, ts.URL+"/api/notifications", api.NotificationConfig{URLs: []string{target}}); resp.StatusCode != http.StatusForbidden {
+	if resp, _ = put(t, member, ts.URL+"/api/notifications", api.NotificationConfig{Targets: []api.NotificationTarget{{URL: target}}}); resp.StatusCode != http.StatusForbidden {
 		t.Errorf("PUT /api/notifications as a non-admin = %d, want 403", resp.StatusCode)
 	}
 }
@@ -182,11 +184,11 @@ func TestEnvManagedNotificationsAreReadOnly(t *testing.T) {
 	if err := json.Unmarshal(body, &cfg); err != nil {
 		t.Fatalf("decode config: %v (%s)", err, body)
 	}
-	if !cfg.EnvManaged || len(cfg.URLs) != 1 {
+	if !cfg.EnvManaged || len(cfg.Targets) != 1 {
 		t.Fatalf("config = %+v, want the single env target marked env-managed", cfg)
 	}
 
-	resp, _ := put(t, admin, ts.URL+"/api/notifications", api.NotificationConfig{URLs: []string{"discord://other@channel"}})
+	resp, _ := put(t, admin, ts.URL+"/api/notifications", api.NotificationConfig{Targets: []api.NotificationTarget{{URL: "discord://other@channel"}}})
 	if resp.StatusCode != http.StatusConflict {
 		t.Errorf("PUT over an env-managed config = %d, want 409", resp.StatusCode)
 	}

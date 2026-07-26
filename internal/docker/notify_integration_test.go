@@ -46,7 +46,7 @@ func TestIntegrationNotifiesOnContainerStop(t *testing.T) {
 	}))
 	defer webhook.Close()
 
-	if err := st.SaveNotificationConfig(api.NotificationConfig{URLs: []string{"generic+" + webhook.URL}}); err != nil {
+	if err := st.SaveNotificationConfig(api.NotificationConfig{Targets: []api.NotificationTarget{{URL: "generic+" + webhook.URL}}}); err != nil {
 		t.Fatalf("save notification config: %v", err)
 	}
 	m.SetNotifier(notify.New(st))

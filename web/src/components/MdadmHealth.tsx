@@ -186,7 +186,7 @@ function SyncProgress({ array }: { array: MdArray }) {
     <div className={vstack({ gap: "1.5", alignItems: "stretch" })}>
       <div className={hstack({ justify: "space-between", gap: "2", fontSize: "sm" })}>
         <span className={css({ fontWeight: "bold", color: "textMuted" })}>
-          {label} — {pct.toFixed(1)}%
+          {label} · {pct.toFixed(1)}%
         </span>
         <span className={css({ color: "textMuted" })}>
           {formatRate(array.syncSpeedKBs * 1024)}

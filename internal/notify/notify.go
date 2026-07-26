@@ -54,13 +54,13 @@ func (n *Notifier) SetBroadcaster(bc Broadcaster) { n.bc = bc }
 func New(st *store.Store) *Notifier {
 	n := &Notifier{st: st}
 	if raw := os.Getenv(EnvURLs); strings.TrimSpace(raw) != "" {
-		cfg := api.NotificationConfig{
-			URLs:       strings.Fields(raw),
-			Events:     envEvents(os.Getenv(EnvEvents)),
-			EnvManaged: true,
+		events := envEvents(os.Getenv(EnvEvents))
+		cfg := api.NotificationConfig{EnvManaged: true}
+		for _, u := range strings.Fields(raw) {
+			cfg.Targets = append(cfg.Targets, api.NotificationTarget{URL: u, Events: events})
 		}
 		n.env = &cfg
-		log.Printf("notifications: %d target(s) configured from %s", len(cfg.URLs), EnvURLs)
+		log.Printf("notifications: %d target(s) configured from %s", len(cfg.Targets), EnvURLs)
 	}
 	return n
 }
@@ -105,12 +105,9 @@ func (n *Notifier) Save(cfg api.NotificationConfig) error {
 	if n.env != nil {
 		return ErrEnvManaged
 	}
-	cfg.URLs = cleanURLs(cfg.URLs)
-	if err := Validate(cfg.URLs); err != nil {
+	cfg.Targets = cleanTargets(cfg.Targets)
+	if err := Validate(cfg.URLs()); err != nil {
 		return err
-	}
-	if cfg.Events == nil {
-		cfg.Events = map[api.NotificationEvent]bool{}
 	}
 	cfg.EnvManaged = false
 	return n.st.SaveNotificationConfig(cfg)
@@ -126,8 +123,8 @@ func Validate(urls []string) error {
 	return nil
 }
 
-// Notify records an event and delivers it to every configured channel, unless
-// that event is switched off for delivery. Recording happens regardless of
+// Notify records an event and delivers it to every channel subscribed to that
+// event. Recording happens regardless of
 // delivery: muting a channel is about interruption, not about whether the thing
 // happened, so the log stays complete and is what makes it safe to turn an
 // event off. It returns immediately; delivery happens in the background and
@@ -144,11 +141,12 @@ func (n *Notifier) Notify(ev api.NotificationEvent, title, body string, meta ...
 		log.Printf("notifications: load config: %v", err)
 		return
 	}
-	if len(cfg.URLs) == 0 || !cfg.Enabled(ev) {
+	urls := cfg.URLsFor(ev)
+	if len(urls) == 0 {
 		return
 	}
 	go func() {
-		if err := Send(cfg.URLs, title, body); err != nil {
+		if err := Send(urls, title, body); err != nil {
 			log.Printf("notifications: send %s: %v", ev, err)
 		}
 	}()
@@ -206,7 +204,7 @@ func (n *Notifier) SendTest(urls []string) error {
 		if err != nil {
 			return err
 		}
-		urls = cfg.URLs
+		urls = cfg.URLs()
 	}
 	if len(urls) == 0 {
 		return errors.New("no notification targets configured")
@@ -239,7 +237,7 @@ func Send(urls []string, title, body string) error {
 
 // inlinesTitle reports whether a target drops the title and so needs it folded
 // into the message body. Shoutrrr's generic webhook posts the bare message as
-// the request body unless it is asked for a JSON payload with ?template=json —
+// the request body unless it is asked for a JSON payload with ?template=json,
 // and the generic+http(s):// form cannot ask for one at all, because shoutrrr
 // forwards that query to the target instead of reading it as config. Without
 // this, a plain webhook would receive "the container is crash-looping" with no
@@ -265,6 +263,23 @@ func cleanURLs(urls []string) []string {
 		if u = strings.TrimSpace(u); u != "" {
 			out = append(out, u)
 		}
+	}
+	return out
+}
+
+// cleanTargets drops targets with a blank URL and normalizes their event maps,
+// so a saved config never carries a target that cannot be sent to.
+func cleanTargets(targets []api.NotificationTarget) []api.NotificationTarget {
+	out := make([]api.NotificationTarget, 0, len(targets))
+	for _, t := range targets {
+		t.URL = strings.TrimSpace(t.URL)
+		if t.URL == "" {
+			continue
+		}
+		if t.Events == nil {
+			t.Events = map[api.NotificationEvent]bool{}
+		}
+		out = append(out, t)
 	}
 	return out
 }

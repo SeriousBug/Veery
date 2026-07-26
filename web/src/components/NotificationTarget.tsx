@@ -1,16 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Trash2, ExternalLink } from "lucide-react";
 import { css } from "styled-system/css";
 import { hstack, vstack } from "styled-system/patterns";
+import { ToggleField } from "./ToggleField";
+import { EVENTS } from "../lib/notificationEvents";
 import {
   CUSTOM_SCHEME,
   SERVICES,
   buildURL,
   newTarget,
   serviceFor,
+  type CompositeSpec,
   type FieldSpec,
   type Target,
 } from "../lib/shoutrrr";
+import type { NotificationEvent } from "../api/generated";
 
 const OVERVIEW_DOCS = "https://containrrr.dev/shoutrrr/v0.8/services/overview/";
 
@@ -80,18 +84,78 @@ function Field({
   );
 }
 
-export function NotificationTarget({
-  target,
+/** One input that fills several fields, e.g. a Discord webhook URL. */
+function CompositeField({
+  spec,
+  values,
   disabled,
   onChange,
+}: {
+  spec: CompositeSpec;
+  values: Record<string, string>;
+  disabled?: boolean;
+  onChange: (patch: Record<string, string>) => void;
+}) {
+  const stored = spec.format(values);
+  const [draft, setDraft] = useState(stored);
+
+  // A change from elsewhere (a config reload, switching service) replaces the
+  // draft, unless the draft already describes the same values. Deliberately not
+  // keyed on the draft: reacting to what the user is typing would fight them.
+  useEffect(() => {
+    setDraft((current) =>
+      stored && stored !== spec.format(spec.parse(current) ?? {}) ? stored : current,
+    );
+  }, [stored, spec]);
+
+  const invalid = draft.trim() !== "" && spec.parse(draft) === null;
+  const empty = draft.trim() === "";
+
+  function edit(v: string) {
+    setDraft(v);
+    const parsed = spec.parse(v);
+    onChange(parsed ?? Object.fromEntries(spec.covers.map((name) => [name, ""])));
+  }
+
+  return (
+    <label className={vstack({ gap: "1", alignItems: "stretch" })}>
+      <span className={labelStyle}>
+        {spec.label}
+        <span className={css({ color: "coral.600" })}> *</span>
+      </span>
+      <input
+        value={draft}
+        disabled={disabled}
+        spellCheck={false}
+        autoComplete="off"
+        placeholder={spec.placeholder}
+        onChange={(e) => edit(e.target.value)}
+        className={`${inputStyle} ${invalid || empty ? invalidInputStyle : ""}`}
+      />
+      <span className={css({ fontSize: "xs", color: invalid ? "coral.600" : "textMuted" })}>
+        {invalid ? spec.invalidHint : spec.hint}
+      </span>
+    </label>
+  );
+}
+
+export function NotificationTarget({
+  target,
+  events,
+  disabled,
+  onChange,
+  onEventsChange,
   onRemove,
 }: {
   target: Target;
+  events: Partial<Record<NotificationEvent, boolean>>;
   disabled?: boolean;
   onChange: (t: Target) => void;
+  onEventsChange: (events: Partial<Record<NotificationEvent, boolean>>) => void;
   onRemove: () => void;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showEvents, setShowEvents] = useState(false);
   const spec = serviceFor(target.scheme);
   const url = buildURL(target);
 
@@ -99,12 +163,18 @@ export function NotificationTarget({
     onChange({ ...target, values: { ...target.values, [name]: v } });
   }
 
+  function setValues(patch: Record<string, string>) {
+    onChange({ ...target, values: { ...target.values, ...patch } });
+  }
+
   function setScheme(scheme: string) {
     onChange({ ...newTarget(scheme), id: target.id });
   }
 
-  const basic = spec?.fields.filter((f) => !f.advanced) ?? [];
+  const covered = new Set(spec?.composite?.covers ?? []);
+  const basic = spec?.fields.filter((f) => !f.advanced && !covered.has(f.name)) ?? [];
   const advanced = spec?.fields.filter((f) => f.advanced) ?? [];
+  const enabledCount = EVENTS.filter(({ event }) => events[event] ?? true).length;
 
   return (
     <div
@@ -171,6 +241,15 @@ export function NotificationTarget({
         </label>
       ) : (
         <>
+          {spec?.composite && (
+            <CompositeField
+              spec={spec.composite}
+              values={target.values}
+              disabled={disabled}
+              onChange={setValues}
+            />
+          )}
+
           <div
             className={css({
               display: "grid",
@@ -229,6 +308,43 @@ export function NotificationTarget({
           )}
         </>
       )}
+
+      <div className={vstack({ gap: "3", alignItems: "stretch" })}>
+        <button
+          onClick={() => setShowEvents((s) => !s)}
+          className={hstack({
+            gap: "1",
+            alignSelf: "flex-start",
+            fontSize: "sm",
+            fontWeight: "extrabold",
+            color: "textMuted",
+            cursor: "pointer",
+            _hover: { color: "accent" },
+          })}
+        >
+          {showEvents ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          What to send here
+          <span className={css({ fontWeight: "medium" })}>
+            {enabledCount === EVENTS.length
+              ? "(everything)"
+              : `(${enabledCount} of ${EVENTS.length})`}
+          </span>
+        </button>
+        {showEvents && (
+          <div className={vstack({ gap: "4", alignItems: "stretch" })}>
+            {EVENTS.map(({ event, title, hint }) => (
+              <ToggleField
+                key={event}
+                title={title}
+                hint={hint}
+                disabled={disabled}
+                checked={events[event] ?? true}
+                onChange={(on) => onEventsChange({ ...events, [event]: on })}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className={vstack({ gap: "1", alignItems: "flex-start" })}>
         {url && (

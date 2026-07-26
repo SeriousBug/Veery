@@ -31,7 +31,7 @@
   border-radius: 9999px;
   flex-shrink: 0;
 }
-/* Connected: steady, calm — a static halo, no motion on a healthy page. */
+/* Connected: steady, calm, a static halo with no motion on a healthy page. */
 .conn-dot--open {
   background: var(--colors-mint-500);
   box-shadow:
@@ -41,7 +41,7 @@
 .conn-dot--connecting {
   animation: conn-amber-breathe 2.8s ease-in-out infinite;
 }
-/* Disconnected: still glows so it stands out, but does not animate — the retry
+/* Disconnected: still glows so it stands out, but does not animate. The retry
    has given up, there is nothing in progress to signal. */
 .conn-dot--closed {
   background: var(--colors-coral-500);

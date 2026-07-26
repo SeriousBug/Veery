@@ -513,7 +513,7 @@ export function Invites() {
                       onClick={() => resetUser.mutate(user.id)}
                       disabled={resetUser.isPending && resetUser.variables === user.id}
                       aria-label={`Reset access for ${user.name}`}
-                      title="Reset access — mint a recovery link"
+                      title="Reset access with a recovery link"
                       className={flex({
                         align: "center",
                         justify: "center",

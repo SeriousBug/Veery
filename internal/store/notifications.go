@@ -8,32 +8,59 @@ import (
 )
 
 const (
+	keyNotifyTargets = "notify_targets"
+	// Written by versions before events became per-target: a URL list and one
+	// event map shared by all of them. Read once, then overwritten on the next
+	// save so the old shape cannot come back.
 	keyNotifyURLs   = "notify_urls"
 	keyNotifyEvents = "notify_events"
 )
 
 // LoadNotificationConfig reads the notification config. An unset config means
-// no targets and every event enabled, so nothing is sent until a URL is added.
+// no targets, so nothing is sent until one is added.
 func (s *Store) LoadNotificationConfig() (api.NotificationConfig, error) {
-	out := api.NotificationConfig{
-		URLs:   []string{},
-		Events: map[api.NotificationEvent]bool{},
-	}
-	if err := s.getJSON(keyNotifyURLs, &out.URLs); err != nil {
+	out := api.NotificationConfig{Targets: []api.NotificationTarget{}}
+	if err := s.getJSON(keyNotifyTargets, &out.Targets); err != nil {
 		return out, err
 	}
-	if err := s.getJSON(keyNotifyEvents, &out.Events); err != nil {
+	if len(out.Targets) > 0 {
+		return out, nil
+	}
+	return s.legacyNotificationConfig()
+}
+
+// legacyNotificationConfig rebuilds targets from the pre-per-target keys, giving
+// every URL the event map they all used to share.
+func (s *Store) legacyNotificationConfig() (api.NotificationConfig, error) {
+	out := api.NotificationConfig{Targets: []api.NotificationTarget{}}
+	var urls []string
+	events := map[api.NotificationEvent]bool{}
+	if err := s.getJSON(keyNotifyURLs, &urls); err != nil {
 		return out, err
+	}
+	if err := s.getJSON(keyNotifyEvents, &events); err != nil {
+		return out, err
+	}
+	for _, u := range urls {
+		copied := make(map[api.NotificationEvent]bool, len(events))
+		for ev, on := range events {
+			copied[ev] = on
+		}
+		out.Targets = append(out.Targets, api.NotificationTarget{URL: u, Events: copied})
 	}
 	return out, nil
 }
 
-// SaveNotificationConfig persists the notification config.
+// SaveNotificationConfig persists the notification config. It clears the legacy
+// keys so removing every target cannot resurrect the pre-per-target URLs.
 func (s *Store) SaveNotificationConfig(cfg api.NotificationConfig) error {
-	if err := s.setJSON(keyNotifyURLs, cfg.URLs); err != nil {
+	if err := s.setJSON(keyNotifyTargets, cfg.Targets); err != nil {
 		return err
 	}
-	return s.setJSON(keyNotifyEvents, cfg.Events)
+	if err := s.setJSON(keyNotifyURLs, []string{}); err != nil {
+		return err
+	}
+	return s.setJSON(keyNotifyEvents, map[api.NotificationEvent]bool{})
 }
 
 // The notifier remembers what it last told the user about, so a restart does

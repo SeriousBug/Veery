@@ -82,7 +82,7 @@ export function statusMeta(status: ContainerStatus): StatusMeta {
 /**
  * A whole service being gone is a service the user took down themselves (a
  * `compose down` removes the containers), so it is not a problem to shout
- * about — the backend only reports a stack as missing when every part of it is.
+ * about. The backend only reports a stack as missing when every part of it is.
  * A part missing from a service that is otherwise up comes back as
  * needs_attention instead.
  */

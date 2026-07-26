@@ -313,8 +313,8 @@ const (
 	// EventAuth fires on passkey enrollment, logins and other account changes.
 	EventAuth NotificationEvent = "auth"
 	// EventRaidScanStarted fires when a data-scrub (check) begins on a RAID
-	// array, whoever started it — Veery's scheduler, a host cron, or a manual
-	// mdadm command — since it is detected as a state transition.
+	// array, whoever started it (Veery's scheduler, a host cron, or a manual
+	// mdadm command), since it is detected as a state transition.
 	EventRaidScanStarted NotificationEvent = "raid_scan_started"
 	// EventRaidScanFinished fires when a data-scrub finishes and the array
 	// returns to idle.
@@ -373,24 +373,49 @@ type EventPage struct {
 	NextCursor string  `json:"nextCursor"`
 }
 
-// NotificationConfig is where notifications go and which events are sent.
-type NotificationConfig struct {
-	// URLs are Shoutrrr service URLs, one per target, e.g.
-	// "discord://token@channel" or "ntfy://ntfy.sh/my-topic". They carry
-	// credentials, so this config is admin-only.
-	URLs []string `json:"urls"`
-	// Events maps each NotificationEvent to whether it is delivered. Events
-	// absent from the map are treated as enabled.
+// NotificationTarget is one place notifications go, and which events it wants.
+type NotificationTarget struct {
+	// URL is a Shoutrrr service URL, e.g. "discord://token@channel" or
+	// "ntfy://ntfy.sh/my-topic". It carries credentials, so this config is
+	// admin-only.
+	URL string `json:"url"`
+	// Events maps each NotificationEvent to whether it is delivered to this
+	// target. Events absent from the map are treated as enabled.
 	Events map[NotificationEvent]bool `json:"events"`
+}
+
+// Enabled reports whether an event should be delivered to this target.
+func (t NotificationTarget) Enabled(ev NotificationEvent) bool {
+	on, ok := t.Events[ev]
+	return !ok || on
+}
+
+// NotificationConfig is where notifications go and which events each target gets.
+type NotificationConfig struct {
+	Targets []NotificationTarget `json:"targets"`
 	// EnvManaged reports that the config comes from VEERY_NOTIFY_URLS and so
 	// cannot be edited through the UI.
 	EnvManaged bool `json:"envManaged"`
 }
 
-// Enabled reports whether an event should be delivered.
-func (c NotificationConfig) Enabled(ev NotificationEvent) bool {
-	on, ok := c.Events[ev]
-	return !ok || on
+// URLs returns every configured target URL, whatever events it is subscribed to.
+func (c NotificationConfig) URLs() []string {
+	out := make([]string, 0, len(c.Targets))
+	for _, t := range c.Targets {
+		out = append(out, t.URL)
+	}
+	return out
+}
+
+// URLsFor returns the targets that want ev.
+func (c NotificationConfig) URLsFor(ev NotificationEvent) []string {
+	out := make([]string, 0, len(c.Targets))
+	for _, t := range c.Targets {
+		if t.Enabled(ev) {
+			out = append(out, t.URL)
+		}
+	}
+	return out
 }
 
 // TestNotificationRequest sends a test message. URLs, when non-empty, are used

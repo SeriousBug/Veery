@@ -70,7 +70,8 @@ VEERY_NOTIFY_EVENTS="container_status,update_applied"
 To get the Discord form, take the webhook URL Discord gives you
 (`https://discord.com/api/webhooks/<channel-id>/<token>`) and write it as `discord://<token>@<channel-id>`.
 
-Veery sends four kinds of event, each of which can be switched off:
+In the UI each target picks its own events; `VEERY_NOTIFY_EVENTS` applies the same list to every
+target. Veery sends four kinds of event, each of which can be switched off:
 
 | Event | Sent when |
 | ----- | --------- |
@@ -99,8 +100,8 @@ docker run -d --name veery \
   ghcr.io/seriousbug/veery:latest
 ```
 
-The image runs as a nonroot user (uid 65532), which cannot open `/var/run/docker.sock` on its own —
-without `--group-add` (`group_add:` in compose) Veery starts but can manage nothing, logging
+The image runs as a nonroot user (uid 65532), which cannot open `/var/run/docker.sock` on its own.
+Without `--group-add` (`group_add:` in compose) Veery starts but can manage nothing, logging
 `permission denied while trying to connect to the Docker daemon socket`. The group must be the one
 owning the socket on the host, which is why the GID is read from the host rather than hardcoded.
 

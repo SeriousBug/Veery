@@ -10,6 +10,8 @@ import {
   buildRRule,
   defaultBuilder,
   describeRRule,
+  formatUntil,
+  nextRun,
   parseBuilder,
   WEEKDAYS,
   type Builder,
@@ -193,6 +195,7 @@ function ArrayScheduleRow({
 }) {
   const rule = ruleOf(form);
   const description = describeRRule(rule);
+  const next = form.enabled ? nextRun(rule) : null;
 
   return (
     <div
@@ -207,7 +210,7 @@ function ArrayScheduleRow({
     >
       <ToggleField
         title={name}
-        hint={`${level} — scrub on a schedule`}
+        hint={`${level}, scrub on a schedule`}
         checked={form.enabled}
         onChange={(enabled) => onChange({ enabled })}
       />
@@ -222,7 +225,9 @@ function ArrayScheduleRow({
 
           <div className={hstack({ justify: "space-between", gap: "3", flexWrap: "wrap" })}>
             <span className={css({ fontSize: "sm", color: description ? "textMuted" : "coral.500" })}>
-              {description ? `Runs ${description}` : "Invalid schedule"}
+              {description
+                ? `Runs ${description}${next ? `. Next run ${formatUntil(next)}.` : ""}`
+                : "Invalid schedule"}
             </span>
             <button
               type="button"

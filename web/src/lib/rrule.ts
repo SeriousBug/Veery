@@ -47,19 +47,66 @@ function stripPrefix(rule: string): string {
   return rule.replace(/^RRULE:/i, "").trim();
 }
 
-// describeRRule returns a human sentence for a rule, including the time of day,
-// which rrule.js's own toText() omits. Returns null when the rule is unparseable.
+// describeRRule returns a human sentence for a rule, including the time of day.
+// toText() renders BYHOUR as a bare "at 1", so the time parts are dropped before
+// handing it the rule and a formatted clock time is appended instead. Returns
+// null when the rule is unparseable.
 export function describeRRule(rule: string): string | null {
   const bare = stripPrefix(rule);
   if (!bare) return null;
   let text: string;
   try {
-    text = RRule.fromString(bare).toText();
+    text = RRule.fromString(withoutTime(bare)).toText();
   } catch {
     return null;
   }
   const time = timeFromRRule(bare);
   return time ? `${text} at ${time}` : text;
+}
+
+function withoutTime(bare: string): string {
+  return bare
+    .split(";")
+    .filter((attr) => !/^(BYHOUR|BYMINUTE|BYSECOND)=/i.test(attr.trim()))
+    .join(";");
+}
+
+// nextRun returns when the rule next fires, evaluated in the browser's timezone.
+// The server evaluates it in its own TZ, so this can be off on a machine set to
+// a different one. Returns null when the rule is unparseable or never fires.
+export function nextRun(rule: string, from: Date = new Date()): Date | null {
+  const bare = stripPrefix(rule);
+  if (!bare) return null;
+  try {
+    // rrule works in UTC, so it is asked about a UTC-shifted "now" and the
+    // answer is shifted back, which keeps BYHOUR meaning the local hour.
+    const start = toUTC(from);
+    start.setUTCSeconds(0, 0);
+    const options = { ...RRule.parseString(bare), dtstart: start };
+    const next = new RRule(options).after(toUTC(from));
+    return next ? fromUTC(next) : null;
+  } catch {
+    return null;
+  }
+}
+
+function toUTC(d: Date): Date {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000);
+}
+
+function fromUTC(d: Date): Date {
+  return new Date(d.getTime() + d.getTimezoneOffset() * 60_000);
+}
+
+// formatUntil renders the wait until a future date, e.g. "in about 3 hours".
+export function formatUntil(target: Date, from: Date = new Date()): string {
+  const minutes = Math.round((target.getTime() - from.getTime()) / 60_000);
+  if (minutes <= 1) return "in a moment";
+  if (minutes < 60) return `in ${minutes} minutes`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `in about ${hours} ${hours === 1 ? "hour" : "hours"}`;
+  const days = Math.round(hours / 24);
+  return `in about ${days} days`;
 }
 
 function pad(n: number): string {

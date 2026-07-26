@@ -158,7 +158,7 @@ function ContainerPanel({
     ? metrics.memLimit > 0
       ? formatUsage(metrics.memUsed, metrics.memLimit)
       : formatBytes(metrics.memUsed)
-    : "—";
+    : "-";
 
   return (
     <div
@@ -184,7 +184,7 @@ function ContainerPanel({
       <div className={grid({ columns: { base: 1, sm: 2 }, gap: "5" })}>
         <Gauge
           label="Processor"
-          value={metrics ? formatPercent(metrics.cpuPercent) : "—"}
+          value={metrics ? formatPercent(metrics.cpuPercent) : "-"}
           pct={metrics?.cpuPercent ?? 0}
           icon={<Cpu size={15} />}
         />

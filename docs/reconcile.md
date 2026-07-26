@@ -8,7 +8,7 @@ source of truth, and they are free to change it at any time, including while Vee
 
 Each managed container has a row with a **snapshot**: the full create-spec captured from
 `docker inspect`. The snapshot is what `Update` and `BringUpStack` recreate the container *from*, so
-a snapshot that no longer matches reality is not a cosmetic problem — it is a spec that will
+a snapshot that no longer matches reality is not a cosmetic problem: it is a spec that will
 overwrite the user's own.
 
 Three things happen out of band:
@@ -22,7 +22,7 @@ Three things happen out of band:
 ## Detecting an edit: the container id
 
 `managed_containers.container_id` records the container the snapshot was taken from. Docker never
-reuses a container id, and starting, stopping or restarting keeps it — only a *recreate* mints a new
+reuses a container id, and starting, stopping or restarting keeps it. Only a *recreate* mints a new
 one. So `live.ID != container_id` means something other than Veery built this container, and its
 spec is one Veery has never seen. There is no config diffing: nothing to tune, and no false
 positives from runtime fields.
@@ -36,7 +36,7 @@ Rows written before the column existed carry an empty id and are backfilled on t
 
 A re-snapshot only happens once the container has **settled**: running and passing its health check,
 or deliberately not running (created, paused, or exited cleanly). A container that is crash-looping,
-dead, or exited non-zero has proved nothing, and its spec is not one to keep — bring-up and update
+dead, or exited non-zero has proved nothing, and its spec is not one to keep: bring-up and update
 rollback build from the snapshot, so recording a spec that cannot run is how a service stays down.
 Until it settles, the previous known-good snapshot stands.
 
@@ -64,16 +64,16 @@ which: **Bring back up**, or **Forget it** (`DELETE /api/containers/{id}/managed
 Reconcile touches things without being asked, so it says so, on events the user can turn off
 independently (`internal/api/types.go`, toggled in Settings):
 
-- `container_adopted` — Veery started managing a container that appeared in a managed stack.
-- `container_missing` — a managed container was removed. Split out of `container_status` because on
+- `container_adopted`: Veery started managing a container that appeared in a managed stack.
+- `container_missing`: a managed container was removed. Split out of `container_status` because on
   a host whose compose files change often it is the noisiest event and usually reports the user's
   own work back to them. A stack that goes *whole* is one message ("blog was taken down"), not one
   per container.
-- `container_status` — crashes, unhealthy, stopped, recovered. What is actually going wrong.
+- `container_status`: crashes, unhealthy, stopped, recovered. What is actually going wrong.
 
 ## Removal, continued
 
-What Veery *can* tell apart is a stopped container from a removed one — a stopped container still
+What Veery *can* tell apart is a stopped container from a removed one. A stopped container still
 exists, so a reboot or a crash-loop never reads as missing. And a stack whose containers are *all*
 missing was taken down whole, which is a thing users do on purpose, so it reports as missing rather
 than needs-attention. A container missing from a service whose other parts are still running has no
