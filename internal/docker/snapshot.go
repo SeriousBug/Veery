@@ -13,13 +13,13 @@ import (
 // Snapshot is the full create-spec captured from `docker inspect`, enough to
 // recreate a container identically (possibly with a new image on update).
 type Snapshot struct {
-	Name             string                     `json:"name"`
-	Image            string                     `json:"image"`
-	Project          string                     `json:"project"`
-	Service          string                     `json:"service"`
-	Config           *container.Config          `json:"config"`
-	HostConfig       *container.HostConfig      `json:"hostConfig"`
-	NetworkingConfig *network.NetworkingConfig  `json:"networkingConfig"`
+	Name             string                    `json:"name"`
+	Image            string                    `json:"image"`
+	Project          string                    `json:"project"`
+	Service          string                    `json:"service"`
+	Config           *container.Config         `json:"config"`
+	HostConfig       *container.HostConfig     `json:"hostConfig"`
+	NetworkingConfig *network.NetworkingConfig `json:"networkingConfig"`
 }
 
 // snapshotFromInspect builds a Snapshot from an inspect response.

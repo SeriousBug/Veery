@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SeriousBug/Veery/internal/api"
 	"github.com/SeriousBug/Veery/internal/store"
 	"github.com/docker/docker/api/types/container"
 )
@@ -217,7 +218,7 @@ func seedDB(t *testing.T, ctx context.Context, m *Manager, name, tmp string) {
 	if err != nil {
 		t.Fatalf("managed lookup: %v", err)
 	}
-	if err := st.SetAutoUpdate(mc.ID, true); err != nil {
+	if err := st.SetAutoUpdate(mc.ID, true, api.SourceUser); err != nil {
 		t.Fatalf("enable auto-update: %v", err)
 	}
 	cfg, err := st.LoadSettings()

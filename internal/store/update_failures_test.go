@@ -1,6 +1,10 @@
 package store
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/SeriousBug/Veery/internal/api"
+)
 
 func TestRecordUpdateFailureCountsPerVersion(t *testing.T) {
 	st := testStore(t)
@@ -87,12 +91,14 @@ func TestDeleteManagedContainerDropsUpdateFailures(t *testing.T) {
 	}
 }
 
-// The attempt kind has to survive the handoff to the updater container, which
-// is a different process reading the row back.
-func TestUpdateJobCarriesAttempt(t *testing.T) {
+// Who asked for the update, and which version it installs, have to survive the
+// handoff to the updater container, which is a different process reading the
+// row back.
+func TestUpdateJobCarriesSourceAndTarget(t *testing.T) {
 	st := testStore(t)
 	if err := st.StartUpdateJob(UpdateJob{
-		ID: "j1", ContainerName: "web", Phase: "start", Auto: true, Target: "sha256:aaa",
+		ID: "j1", ContainerName: "web", Phase: "start",
+		Source: api.SourceAutomation, Target: "sha256:aaa",
 	}); err != nil {
 		t.Fatalf("start job: %v", err)
 	}
@@ -100,29 +106,29 @@ func TestUpdateJobCarriesAttempt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load job: %v", err)
 	}
-	if !j.Auto || j.Target != "sha256:aaa" {
-		t.Errorf("job auto=%v target=%q, want true/sha256:aaa", j.Auto, j.Target)
+	if j.Source != api.SourceAutomation || j.Target != "sha256:aaa" {
+		t.Errorf("job source=%q target=%q, want %q/sha256:aaa", j.Source, j.Target, api.SourceAutomation)
 	}
 }
 
 // Auto-update off because the user turned it off, and off because Veery gave
 // up on it, are different states: the UI has to be able to say which.
-func TestStopAutoUpdateIsDistinctFromTurningItOff(t *testing.T) {
+func TestAutoUpdateRecordsWhoTurnedItOff(t *testing.T) {
 	st := testStore(t)
 	add(t, st, "m1", "web", "web-1")
 
-	if err := st.SetAutoUpdate("m1", true); err != nil {
+	if err := st.SetAutoUpdate("m1", true, api.SourceUser); err != nil {
 		t.Fatalf("set auto-update: %v", err)
 	}
-	if err := st.StopAutoUpdate("m1"); err != nil {
+	if err := st.SetAutoUpdate("m1", false, api.SourceAutomation); err != nil {
 		t.Fatalf("stop auto-update: %v", err)
 	}
 	mc, err := st.ManagedByID("m1")
 	if err != nil {
 		t.Fatalf("load managed: %v", err)
 	}
-	if mc.AutoUpdate || !mc.AutoUpdateStopped {
-		t.Errorf("after Veery stopped it: autoUpdate=%v stopped=%v, want false/true", mc.AutoUpdate, mc.AutoUpdateStopped)
+	if mc.AutoUpdate || mc.AutoUpdateSource != api.SourceAutomation {
+		t.Errorf("after Veery stopped it: autoUpdate=%v source=%q, want false/%q", mc.AutoUpdate, mc.AutoUpdateSource, api.SourceAutomation)
 	}
 	// The container is no longer polled either way.
 	list, err := st.AutoUpdateContainers()
@@ -133,28 +139,28 @@ func TestStopAutoUpdateIsDistinctFromTurningItOff(t *testing.T) {
 		t.Errorf("got %d auto-updating containers, want 0", len(list))
 	}
 
-	// Turning it back on is the user taking it over again, so the flag goes.
-	if err := st.SetAutoUpdate("m1", true); err != nil {
+	// Turning it back on is the user taking it over again.
+	if err := st.SetAutoUpdate("m1", true, api.SourceUser); err != nil {
 		t.Fatalf("set auto-update: %v", err)
 	}
 	mc, err = st.ManagedByID("m1")
 	if err != nil {
 		t.Fatalf("load managed: %v", err)
 	}
-	if !mc.AutoUpdate || mc.AutoUpdateStopped {
-		t.Errorf("after the user turned it on: autoUpdate=%v stopped=%v, want true/false", mc.AutoUpdate, mc.AutoUpdateStopped)
+	if !mc.AutoUpdate || mc.AutoUpdateSource != api.SourceUser {
+		t.Errorf("after the user turned it on: autoUpdate=%v source=%q, want true/%q", mc.AutoUpdate, mc.AutoUpdateSource, api.SourceUser)
 	}
 
 	// The user turning it off is their own choice, and must not read as Veery
 	// giving up on it.
-	if err := st.SetAutoUpdate("m1", false); err != nil {
+	if err := st.SetAutoUpdate("m1", false, api.SourceUser); err != nil {
 		t.Fatalf("set auto-update: %v", err)
 	}
 	mc, err = st.ManagedByID("m1")
 	if err != nil {
 		t.Fatalf("load managed: %v", err)
 	}
-	if mc.AutoUpdate || mc.AutoUpdateStopped {
-		t.Errorf("after the user turned it off: autoUpdate=%v stopped=%v, want false/false", mc.AutoUpdate, mc.AutoUpdateStopped)
+	if mc.AutoUpdate || mc.AutoUpdateSource != api.SourceUser {
+		t.Errorf("after the user turned it off: autoUpdate=%v source=%q, want false/%q", mc.AutoUpdate, mc.AutoUpdateSource, api.SourceUser)
 	}
 }

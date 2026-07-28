@@ -16,6 +16,17 @@ const (
 	StatusMissing        ContainerStatus = "missing"
 )
 
+// Source says who asked for an action: a person, or Veery acting on its own.
+// The two are worth telling apart wherever the answer changes what happens
+// next — a person is watching the outcome of what they asked for, and Veery
+// deciding on its own to stop doing something has to be explained.
+type Source string
+
+const (
+	SourceUser       Source = "user"
+	SourceAutomation Source = "automation"
+)
+
 // User is an account. Passkey-only; no password ever stored.
 type User struct {
 	ID        string `json:"id"`
@@ -54,15 +65,15 @@ type Container struct {
 	Health        string          `json:"health"`
 	Managed       bool            `json:"managed"`
 	AutoUpdate    bool            `json:"autoUpdate"`
-	// AutoUpdateStopped says AutoUpdate is off because Veery turned it off, one
-	// failed version after another, rather than because the user chose to. The
-	// two look the same in a toggle and mean opposite things: one is a settled
-	// choice, the other is a service that is stuck and stays behind until
-	// somebody looks at it.
-	AutoUpdateStopped bool  `json:"autoUpdateStopped"`
-	UpdateAvailable   bool  `json:"updateAvailable"`
-	RestartCount      int   `json:"restartCount"`
-	CreatedAt         int64 `json:"createdAt"`
+	// AutoUpdateSource is who last set AutoUpdate. With AutoUpdate off,
+	// SourceAutomation means Veery turned it off itself after one failed version
+	// after another, which is a different thing from the user choosing to leave
+	// it off: one is a settled choice, the other is a service that is stuck and
+	// stays behind until somebody looks at it.
+	AutoUpdateSource Source `json:"autoUpdateSource"`
+	UpdateAvailable  bool   `json:"updateAvailable"`
+	RestartCount     int    `json:"restartCount"`
+	CreatedAt        int64  `json:"createdAt"`
 }
 
 // Stack groups containers by compose project (or manual grouping).

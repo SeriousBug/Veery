@@ -24,18 +24,19 @@ const oldSuffix = "__veery_old"
 const verifyTimeout = 15 * time.Second
 
 // Update pulls the latest image for a managed container and, if the digest
-// changed, recreates the container from its snapshot on the new image. The
-// whole operation runs through a job so progress is broadcast over the WS and
-// persisted, and it is safe to call from a goroutine with a context that
-// outlives the request that triggered it.
-func (m *Manager) Update(ctx context.Context, managedID string) {
-	m.update(ctx, managedID, updateAttempt{})
+// changed, recreates the container from its snapshot on the new image. src says
+// who asked for it, which decides whether a failure counts against the version
+// (see noteUpdateFailure). The whole operation runs through a job so progress is
+// broadcast over the WS and persisted, and it is safe to call from a goroutine
+// with a context that outlives the request that triggered it.
+func (m *Manager) Update(ctx context.Context, managedID string, src api.Source) {
+	m.update(ctx, managedID, src, "")
 }
 
-// update is Update with the bookkeeping the auto-updater needs: at says whether
-// the attempt was automatic and which version it installs, which is what a
-// failure gets counted against (see noteUpdateFailure).
-func (m *Manager) update(ctx context.Context, managedID string, at updateAttempt) {
+// update is Update with the target the auto-updater has already resolved: the
+// digest the registry serves for this container's image, which is the version a
+// failure gets counted against. Empty means unknown, and nothing is counted.
+func (m *Manager) update(ctx context.Context, managedID string, src api.Source, target string) {
 	mc, err := m.st.ResolveManaged(managedID)
 	if err != nil {
 		m.job(ctx, "update", managedID, func(emit func(phase, msg string)) error {
@@ -49,8 +50,8 @@ func (m *Manager) update(ctx context.Context, managedID string, at updateAttempt
 		ID:            id,
 		ContainerName: mc.ContainerName,
 		Phase:         "start",
-		Auto:          at.Auto,
-		Target:        at.Target,
+		Source:        src,
+		Target:        target,
 	}); err != nil {
 		log.Printf("update: record job: %v", err)
 	}
@@ -70,7 +71,7 @@ func (m *Manager) update(ctx context.Context, managedID string, at updateAttempt
 			_ = m.st.FinishUpdateJob(id, "failed", "", err.Error())
 			m.notify(api.EventUpdateApplied, "Update failed: "+mc.ContainerName, err.Error(),
 				api.EventMeta{ContainerName: mc.ContainerName, StackID: mc.StackID})
-			if m.noteUpdateFailure(mc, at, err) {
+			if m.noteUpdateFailure(mc, src, target, err) {
 				// Auto-update was switched off; the toggle in the UI is now stale.
 				m.BroadcastStacks(ctx)
 			}

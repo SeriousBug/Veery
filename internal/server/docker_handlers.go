@@ -128,7 +128,7 @@ func (s *Server) handleContainerUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	go s.dkr.Update(detached(r), id)
+	go s.dkr.Update(detached(r), id, api.SourceUser)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -193,12 +193,15 @@ func (s *Server) handleSetAutoUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "container not managed")
 		return
 	}
-	if err := s.store.SetAutoUpdate(mc.ID, req.AutoUpdate); err != nil {
+	// This handler is the user's own toggle, whichever way they moved it, so it
+	// takes the state out of Veery's hands: an off toggle set here is a choice,
+	// not Veery having given up on the container.
+	if err := s.store.SetAutoUpdate(mc.ID, req.AutoUpdate, api.SourceUser); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	// Turning auto-update on is the user saying to start over, including after
-	// Veery turned it off because version after version failed to install.
+	// Turning it on is the user saying to start over, including after Veery
+	// turned it off because version after version failed to install.
 	if req.AutoUpdate {
 		if err := s.store.ClearUpdateFailures(mc.ContainerName); err != nil {
 			log.Printf("auto-update: clear failures for %s: %v", mc.ContainerName, err)

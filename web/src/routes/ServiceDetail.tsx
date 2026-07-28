@@ -215,7 +215,7 @@ function ContainerPanel({
       <AutoUpdateToggle
         containerId={container.containerName}
         autoUpdate={container.autoUpdate}
-        stopped={container.autoUpdateStopped}
+        source={container.autoUpdateSource}
       />
 
       <details className={css({ "& > summary": { listStyle: "none" } })}>

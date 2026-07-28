@@ -18,6 +18,15 @@ export const StatusNeedsAttention: ContainerStatus = "needs_attention";
 export const StatusUpdating: ContainerStatus = "updating";
 export const StatusMissing: ContainerStatus = "missing";
 /**
+ * Source says who asked for an action: a person, or Veery acting on its own.
+ * The two are worth telling apart wherever the answer changes what happens
+ * next — a person is watching the outcome of what they asked for, and Veery
+ * deciding on its own to stop doing something has to be explained.
+ */
+export type Source = string;
+export const SourceUser: Source = "user";
+export const SourceAutomation: Source = "automation";
+/**
  * User is an account. Passkey-only; no password ever stored.
  */
 export interface User {
@@ -63,13 +72,13 @@ export interface Container {
   managed: boolean;
   autoUpdate: boolean;
   /**
-   * AutoUpdateStopped says AutoUpdate is off because Veery turned it off, one
-   * failed version after another, rather than because the user chose to. The
-   * two look the same in a toggle and mean opposite things: one is a settled
-   * choice, the other is a service that is stuck and stays behind until
-   * somebody looks at it.
+   * AutoUpdateSource is who last set AutoUpdate. With AutoUpdate off,
+   * SourceAutomation means Veery turned it off itself after one failed version
+   * after another, which is a different thing from the user choosing to leave
+   * it off: one is a settled choice, the other is a service that is stuck and
+   * stays behind until somebody looks at it.
    */
-  autoUpdateStopped: boolean;
+  autoUpdateSource: Source;
   updateAvailable: boolean;
   restartCount: number /* int */;
   createdAt: number /* int64 */;

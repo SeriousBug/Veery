@@ -23,22 +23,6 @@ const maxVersionAttempts = 3
 // the user can sort out.
 const maxFailedVersions = 3
 
-// updateAttempt says who asked for an update and which version it installs.
-//
-// Auto is false for one a person asked for: those are never blocked and never
-// counted, because someone is watching the outcome and can decide for
-// themselves whether to try again.
-//
-// Target is the digest the registry serves for the container's image tag, which
-// is what makes "this version keeps failing" a thing that can be counted. It is
-// empty when the registry could not be asked, and a failure with no target is
-// not counted: the update is about to fail for a reason that has nothing to do
-// with the version.
-type updateAttempt struct {
-	Auto   bool
-	Target string
-}
-
 // AutoUpdatePoller periodically updates every managed container that has
 // auto-update enabled. The interval comes from Settings
 // (AutoUpdateIntervalMinutes, default 60). It runs until ctx is cancelled.
@@ -88,7 +72,7 @@ func (m *Manager) runAutoUpdates(ctx context.Context) {
 			continue
 		}
 		log.Printf("auto-update: checking %s", mc.ContainerName)
-		m.update(ctx, mc.ID, updateAttempt{Auto: true, Target: target})
+		m.update(ctx, mc.ID, api.SourceAutomation, target)
 	}
 }
 
@@ -128,20 +112,27 @@ func (m *Manager) writtenOff(containerName, target string) bool {
 	return false
 }
 
-// noteUpdateFailure counts one failed auto-update against the version it was
+// noteUpdateFailure counts one failed update against the version it was
 // installing, and gives up when there is no point trying again: on the version
 // once it has failed maxVersionAttempts times, and on auto-update itself once
 // maxFailedVersions versions have been written off. Both are announced, since
 // a service quietly staying behind is exactly what auto-update was turned on to
 // prevent.
 //
+// Only Veery's own attempts count. An update a person asked for is one they are
+// watching the outcome of, and they can decide for themselves whether to try
+// again; retrying a broken image by hand must not be what turns their
+// auto-updates off. Neither does an attempt with no known target: the registry
+// could not be asked, so there is no version to blame and an outage must not
+// read as a run of bad releases.
+//
 // It reports whether auto-update was switched off, so the caller can refresh
 // the clients that are showing the toggle.
-func (m *Manager) noteUpdateFailure(mc store.ManagedContainer, at updateAttempt, cause error) bool {
-	if !at.Auto || at.Target == "" {
+func (m *Manager) noteUpdateFailure(mc store.ManagedContainer, src api.Source, target string, cause error) bool {
+	if src != api.SourceAutomation || target == "" {
 		return false
 	}
-	row, err := m.st.RecordUpdateFailure(mc.ContainerName, at.Target, cause.Error())
+	row, err := m.st.RecordUpdateFailure(mc.ContainerName, target, cause.Error())
 	if err != nil {
 		log.Printf("auto-update: record failure for %s: %v", mc.ContainerName, err)
 		return false
@@ -175,7 +166,7 @@ func (m *Manager) noteUpdateFailure(mc store.ManagedContainer, at updateAttempt,
 		return false
 	}
 
-	if err := m.st.StopAutoUpdate(mc.ID); err != nil {
+	if err := m.st.SetAutoUpdate(mc.ID, false, api.SourceAutomation); err != nil {
 		log.Printf("auto-update: turn off for %s: %v", mc.ContainerName, err)
 		return false
 	}

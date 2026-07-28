@@ -114,19 +114,20 @@ var migrations = []string{
 		last_at INTEGER NOT NULL,
 		PRIMARY KEY (container_name, target)
 	);`,
-	// auto and target carry the kind of update a job is across a self-update
-	// handoff: the helper container that finishes the job is a different process
-	// from the one that started it, and it has to know whether the failure it may
-	// be about to record was an automatic attempt, and at which version.
-	`ALTER TABLE update_jobs ADD COLUMN auto INTEGER NOT NULL DEFAULT 0;`,
+	// source and target carry who asked for an update, and which version it
+	// installs, across a self-update handoff: the helper container that finishes
+	// the job is a different process from the one that started it, and it has to
+	// know whether the failure it may be about to record was Veery's own attempt,
+	// and at which version.
+	`ALTER TABLE update_jobs ADD COLUMN source TEXT NOT NULL DEFAULT '';`,
 	`ALTER TABLE update_jobs ADD COLUMN target TEXT NOT NULL DEFAULT '';`,
-	// auto_update_stopped separates the two ways auto-update ends up off: the
-	// user turned it off, or Veery did because version after version failed to
-	// install. They mean opposite things — one is a settled choice, the other is
-	// a service that is stuck and needs looking at — so the UI has to be able to
-	// tell them apart. Only ever set while auto_update is 0, and cleared the
-	// moment the user turns it back on.
-	`ALTER TABLE managed_containers ADD COLUMN auto_update_stopped INTEGER NOT NULL DEFAULT 0;`,
+	// auto_update_source is who last set auto_update, which separates the two
+	// ways it ends up off: the user turned it off, or Veery did because version
+	// after version failed to install. They mean opposite things — one is a
+	// settled choice, the other is a service that is stuck and needs looking at —
+	// so the UI has to be able to tell them apart. Rows that predate the column
+	// were all set by a user, which is what the default says.
+	`ALTER TABLE managed_containers ADD COLUMN auto_update_source TEXT NOT NULL DEFAULT 'user';`,
 }
 
 func (s *Store) migrate() error {

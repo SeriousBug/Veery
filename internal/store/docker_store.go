@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/SeriousBug/Veery/internal/api"
 )
 
 // Stack is a persisted managed stack.
@@ -24,14 +26,14 @@ type ManagedContainer struct {
 	// which is how a stale snapshot is spotted.
 	ContainerID string
 	AutoUpdate  bool
-	// AutoUpdateStopped says auto-update is off because Veery turned it off,
-	// after version after version failed to install, rather than because the
-	// user chose to. It is only meaningful while AutoUpdate is false.
-	AutoUpdateStopped bool
-	CreatedAt         int64
+	// AutoUpdateSource is who last set AutoUpdate. With AutoUpdate off,
+	// api.SourceAutomation means Veery turned it off after one failed version
+	// after another, rather than the user choosing to leave it off.
+	AutoUpdateSource api.Source
+	CreatedAt        int64
 }
 
-const managedCols = `id,stack_id,container_name,snapshot_json,container_id,auto_update,auto_update_stopped,created_at`
+const managedCols = `id,stack_id,container_name,snapshot_json,container_id,auto_update,auto_update_source,created_at`
 
 // UpsertStack inserts or leaves a stack (id == name), returning the stack.
 func (s *Store) UpsertStack(name string) (Stack, error) {
@@ -58,12 +60,15 @@ func (s *Store) AddManagedContainer(mc ManagedContainer) error {
 	if mc.CreatedAt == 0 {
 		mc.CreatedAt = time.Now().Unix()
 	}
+	if mc.AutoUpdateSource == "" {
+		mc.AutoUpdateSource = api.SourceUser
+	}
 	_, err := s.db.Exec(`INSERT INTO managed_containers(`+managedCols+`)
 		VALUES(?,?,?,?,?,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET stack_id=excluded.stack_id, snapshot_json=excluded.snapshot_json,
 			container_id=excluded.container_id`,
 		mc.ID, mc.StackID, mc.ContainerName, mc.SnapshotJSON, mc.ContainerID,
-		boolInt(mc.AutoUpdate), boolInt(mc.AutoUpdateStopped), mc.CreatedAt)
+		boolInt(mc.AutoUpdate), string(mc.AutoUpdateSource), mc.CreatedAt)
 	return err
 }
 
@@ -129,11 +134,10 @@ func (s *Store) AutoUpdateContainers() ([]ManagedContainer, error) {
 
 func scanOneManaged(row scanner) (ManagedContainer, error) {
 	var mc ManagedContainer
-	var au, stopped int
+	var au int
 	err := row.Scan(&mc.ID, &mc.StackID, &mc.ContainerName, &mc.SnapshotJSON, &mc.ContainerID,
-		&au, &stopped, &mc.CreatedAt)
+		&au, &mc.AutoUpdateSource, &mc.CreatedAt)
 	mc.AutoUpdate = au != 0
-	mc.AutoUpdateStopped = stopped != 0
 	return mc, err
 }
 
@@ -149,27 +153,14 @@ func scanManaged(rows *sql.Rows) ([]ManagedContainer, error) {
 	return out, rows.Err()
 }
 
-// SetAutoUpdate toggles auto-update for a managed container by id. This is the
-// user's own choice, so it also clears the flag saying Veery stopped it: off by
-// choice and off because updates kept failing are different states, and turning
-// it back on ends the second one.
-func (s *Store) SetAutoUpdate(id string, on bool) error {
-	res, err := s.db.Exec(`UPDATE managed_containers SET auto_update=?, auto_update_stopped=0 WHERE id=?`,
-		boolInt(on), id)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-// StopAutoUpdate turns auto-update off and records that Veery did it, not the
-// user. It is what the auto-updater calls when it gives up on a container, and
-// it is what lets the UI say why the toggle is off.
-func (s *Store) StopAutoUpdate(id string) error {
-	res, err := s.db.Exec(`UPDATE managed_containers SET auto_update=0, auto_update_stopped=1 WHERE id=?`, id)
+// SetAutoUpdate toggles auto-update for a managed container by id, recording
+// who asked for it: api.SourceUser for the toggle in the UI, or
+// api.SourceAutomation when Veery gives up on a container that will not
+// install a new version. Off by choice and off because updates kept failing
+// are different states, and this is what tells them apart.
+func (s *Store) SetAutoUpdate(id string, on bool, src api.Source) error {
+	res, err := s.db.Exec(`UPDATE managed_containers SET auto_update=?, auto_update_source=? WHERE id=?`,
+		boolInt(on), string(src), id)
 	if err != nil {
 		return err
 	}

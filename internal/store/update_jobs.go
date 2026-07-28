@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/SeriousBug/Veery/internal/api"
 )
 
 // UpdateJob is a persisted record of an update in flight. It exists because the
@@ -19,28 +21,27 @@ type UpdateJob struct {
 	Error         string
 	Self          bool
 	Done          bool
-	// Auto says the update was started by the auto-update poller rather than by
-	// a person, and Target names the version it is installing. Together they are
-	// what lets a failure be counted against a version, by whichever process
-	// ends up finishing the job.
-	Auto       bool
+	// Source says who asked for the update, and Target names the version it is
+	// installing. Together they are what lets a failure be counted against a
+	// version, by whichever process ends up finishing the job.
+	Source     api.Source
 	Target     string
 	StartedAt  int64
 	FinishedAt int64
 }
 
-const jobCols = `id,container_name,image,phase,message,error,is_self,done,auto,target,started_at,finished_at`
+const jobCols = `id,container_name,image,phase,message,error,is_self,done,source,target,started_at,finished_at`
 
 // StartUpdateJob records a new in-flight update.
 func (s *Store) StartUpdateJob(j UpdateJob) error {
 	if j.StartedAt == 0 {
 		j.StartedAt = time.Now().Unix()
 	}
-	_, err := s.db.Exec(`INSERT INTO update_jobs(id,container_name,image,phase,message,is_self,done,auto,target,started_at)
+	_, err := s.db.Exec(`INSERT INTO update_jobs(id,container_name,image,phase,message,is_self,done,source,target,started_at)
 		VALUES(?,?,?,?,?,?,0,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET phase=excluded.phase, message=excluded.message`,
 		j.ID, j.ContainerName, j.Image, j.Phase, j.Message, boolInt(j.Self),
-		boolInt(j.Auto), j.Target, j.StartedAt)
+		string(j.Source), j.Target, j.StartedAt)
 	return err
 }
 
@@ -123,11 +124,10 @@ type scanner interface {
 
 func scanUpdateJob(row scanner) (UpdateJob, error) {
 	var j UpdateJob
-	var isSelf, done, auto int
+	var isSelf, done int
 	err := row.Scan(&j.ID, &j.ContainerName, &j.Image, &j.Phase, &j.Message, &j.Error,
-		&isSelf, &done, &auto, &j.Target, &j.StartedAt, &j.FinishedAt)
+		&isSelf, &done, &j.Source, &j.Target, &j.StartedAt, &j.FinishedAt)
 	j.Self = isSelf != 0
 	j.Done = done != 0
-	j.Auto = auto != 0
 	return j, err
 }

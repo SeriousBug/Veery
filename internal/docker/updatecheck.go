@@ -113,7 +113,7 @@ func (m *Manager) checkUpdates(ctx context.Context, managed []store.ManagedConta
 // itself. Auto-update being off because Veery gave up is not the same news as
 // auto-update being off because the user wants to install updates by hand.
 func updateAvailableBody(mc store.ManagedContainer) string {
-	if mc.AutoUpdateStopped {
+	if mc.AutoUpdateSource == api.SourceAutomation {
 		return "A newer image has been published. Auto-update is off for this container because Veery turned it off, after version after version failed to install, so it will keep running the current image until you look at it."
 	}
 	return "A newer image has been published. Auto-update is off for this container, so it will keep running the current image until you update it."

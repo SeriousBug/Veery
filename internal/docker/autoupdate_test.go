@@ -43,7 +43,7 @@ func fail(t *testing.T, m *Manager, mc store.ManagedContainer, target string, n 
 			continue
 		}
 		attempts++
-		m.noteUpdateFailure(mc, updateAttempt{Auto: true, Target: target}, errors.New("new container exited (exit code 1)"))
+		m.noteUpdateFailure(mc, api.SourceAutomation, target, errors.New("new container exited (exit code 1)"))
 	}
 	return attempts
 }
@@ -89,8 +89,8 @@ func TestAutoUpdateTurnsItselfOffAfterEnoughFailedVersions(t *testing.T) {
 	}
 	// Off because Veery gave up, not because the user chose to: the UI shows the
 	// two differently.
-	if !got.AutoUpdateStopped {
-		t.Error("auto-update should be marked as stopped by Veery, not by the user")
+	if got.AutoUpdateSource != api.SourceAutomation {
+		t.Errorf("auto-update source = %q, want %q", got.AutoUpdateSource, api.SourceAutomation)
 	}
 	// One alert per written-off version, and the last one is the switch-off.
 	if len(notif.events) != maxFailedVersions {
@@ -137,23 +137,24 @@ func TestAutoUpdateCountsOnlyConsecutiveFailedVersions(t *testing.T) {
 	}
 }
 
-// A manual update is the user watching the outcome themselves. It is never
-// counted, so it can neither write off a version nor switch auto-update off.
-func TestManualUpdateFailuresAreNotCounted(t *testing.T) {
+// An update a person asked for is one they are watching the outcome of. It is
+// never counted, so it can neither write off a version nor switch auto-update
+// off.
+func TestUserUpdateFailuresAreNotCounted(t *testing.T) {
 	m, notif, mc := failingContainer(t)
 
 	for range maxVersionAttempts * maxFailedVersions {
-		m.noteUpdateFailure(mc, updateAttempt{}, errors.New("boom"))
+		m.noteUpdateFailure(mc, api.SourceUser, "sha256:aaa", errors.New("boom"))
 	}
 	if m.writtenOff(mc.ContainerName, "sha256:aaa") {
-		t.Error("manual failures must not write off a version")
+		t.Error("a user's failures must not write off a version")
 	}
 	if len(notif.events) != 0 {
-		t.Errorf("got %d alerts from manual updates, want 0", len(notif.events))
+		t.Errorf("got %d alerts from user-asked updates, want 0", len(notif.events))
 	}
 	got, _ := m.st.ManagedByID(mc.ID)
 	if !got.AutoUpdate {
-		t.Error("manual failures must not turn auto-update off")
+		t.Error("a user's failures must not turn auto-update off")
 	}
 }
 
@@ -163,7 +164,7 @@ func TestFailuresWithNoKnownVersionAreNotCounted(t *testing.T) {
 	m, notif, mc := failingContainer(t)
 
 	for range maxVersionAttempts * maxFailedVersions {
-		m.noteUpdateFailure(mc, updateAttempt{Auto: true}, errors.New("pull nginx:latest: no such host"))
+		m.noteUpdateFailure(mc, api.SourceAutomation, "", errors.New("pull nginx:latest: no such host"))
 	}
 	if len(notif.events) != 0 {
 		t.Errorf("got %d alerts, want 0", len(notif.events))

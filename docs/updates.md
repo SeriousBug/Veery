@@ -48,30 +48,35 @@ Both are announced under the `auto_update_stopped` event, its own alert category
 one update event that needs the user to do something: a service that has quietly stopped updating is
 exactly what auto-update was turned on to prevent.
 
-### Off by choice vs. off because Veery gave up
-
-A toggle that is off looks the same either way and means opposite things: one is a settled choice,
-the other is a service that is stuck and stays behind until somebody looks at it. So the two are
-stored apart. `managed_containers.auto_update_stopped` is set only by `StopAutoUpdate`, which is
-what the auto-updater calls; `SetAutoUpdate` — the user's own toggle, in either direction — always
-clears it. It rides out on `api.Container.AutoUpdateStopped`, and `AutoUpdateToggle` turns the card
-red and explains what happened and where to look, rather than presenting an off switch with no
-explanation. The "update available" notification says which of the two it is for the same reason.
-
 Counts live in `update_failures` (`internal/store/update_failures.go`), keyed by container name and
 target digest. They are dropped when an update succeeds, when the user turns auto-update back on
 (that is the user saying to start over), and when the container stops being managed.
 
-Two attempts are deliberately **not** counted:
+Every update carries an `api.Source` saying who asked for it — `SourceUser` or `SourceAutomation` —
+passed in by the caller: `Manager.Update(ctx, id, src)` from the HTTP handler, `SourceAutomation`
+from the poller. Two attempts are deliberately **not** counted:
 
-- A **manual** update. Someone is watching the outcome and can decide for themselves whether to try
-  again; a person retrying a broken image must not be what turns their auto-updates off.
+- One a **user** asked for. Someone is watching the outcome and can decide for themselves whether to
+  try again; a person retrying a broken image must not be what turns their auto-updates off.
 - One where the registry could not be reached, so `targetVersion` is empty. There is no version to
   blame, and a network outage must not read as three bad releases.
 
 A self-update is counted like any other, even though the process that finishes it is not the one
-that started it: the `auto` and `target` columns on `update_jobs` carry the attempt across the
-handoff for `ApplyUpdate` to read back.
+that started it: the `source` and `target` columns on `update_jobs` carry both across the handoff for
+`ApplyUpdate` to read back.
+
+### Off by choice vs. off because Veery gave up
+
+A toggle that is off looks the same either way and means opposite things: one is a settled choice,
+the other is a service that is stuck and stays behind until somebody looks at it. The same
+`api.Source` tells them apart: `SetAutoUpdate(id, on, src)` records who last set it in
+`managed_containers.auto_update_source`, so off + `automation` is Veery having given up and off +
+`user` is a choice. The HTTP toggle always passes `SourceUser`, in either direction, which is what
+makes turning it back on hand the container back to the user.
+
+It rides out on `api.Container.AutoUpdateSource`. `AutoUpdateToggle` turns the card red and explains
+what happened and where to look, rather than presenting an off switch with no explanation, and the
+"update available" notification says which of the two it is for the same reason.
 
 ## Veery updating itself
 

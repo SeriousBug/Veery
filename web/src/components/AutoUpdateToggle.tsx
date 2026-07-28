@@ -4,20 +4,20 @@ import { Link } from "@tanstack/react-router";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { css } from "styled-system/css";
 import { hstack, vstack } from "styled-system/patterns";
+import { SourceAutomation, SourceUser, type Source } from "../api/generated";
 import { useAuth } from "../auth/AuthProvider";
 import { setAutoUpdate } from "../lib/actions";
 
 export function AutoUpdateToggle({
   containerId,
   autoUpdate,
-  stopped = false,
+  source = SourceUser,
 }: {
   containerId: string;
   autoUpdate: boolean;
-  /** Veery turned auto-update off itself, because new versions kept failing to
-   * install. An off toggle otherwise means the user chose to leave it off, and
-   * the two need to read differently. */
-  stopped?: boolean;
+  /** Who last set autoUpdate. Off because Veery gave up on the container reads
+   * differently from off because the user chose to leave it off. */
+  source?: Source;
 }) {
   const [checked, setChecked] = useState(autoUpdate);
   const [pending, setPending] = useState(false);
@@ -30,9 +30,9 @@ export function AutoUpdateToggle({
     setPending(false);
   }
 
-  // Turning it back on clears the stopped state server-side, so the warning
+  // Flipping the switch makes the user the source server-side, so the warning
   // goes as soon as the switch does rather than waiting for a stacks refresh.
-  const showStopped = stopped && !checked;
+  const showStopped = !checked && source === SourceAutomation;
 
   return (
     <div className={vstack({ gap: "2", alignItems: "stretch" })}>

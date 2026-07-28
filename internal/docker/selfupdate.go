@@ -120,14 +120,15 @@ func (m *Manager) ApplyUpdate(ctx context.Context, name, jobID string) error {
 		}
 	}
 
-	// The Veery that scheduled this update is the one that knew whether it was
-	// automatic and which version it aimed at, and it is on its way out. The job
-	// row carries that across, so a self-update that keeps failing is written off
+	// The Veery that scheduled this update is the one that knew who asked for it
+	// and which version it aimed at, and it is on its way out. The job row
+	// carries that across, so a self-update that keeps failing is written off
 	// like any other.
-	var at updateAttempt
+	var src api.Source
+	var target string
 	if jobID != "" {
 		if j, err := m.st.UpdateJobByID(jobID); err == nil {
-			at = updateAttempt{Auto: j.Auto, Target: j.Target}
+			src, target = j.Source, j.Target
 		}
 	}
 
@@ -136,22 +137,22 @@ func (m *Manager) ApplyUpdate(ctx context.Context, name, jobID string) error {
 	newImg, err := m.cli.ImageInspect(ctx, ref)
 	if err != nil {
 		if newImg, err = m.pullImage(ctx, ref, emit); err != nil {
-			return m.finishApply(mc, jobID, at, err)
+			return m.finishApply(mc, jobID, src, target, err)
 		}
 	}
 	if newImg.ID == oldInsp.Image {
 		emit("up-to-date", "Already up to date")
-		return m.finishApply(mc, jobID, at, nil)
+		return m.finishApply(mc, jobID, src, target, nil)
 	}
 
 	err = m.swap(ctx, mc, snap, ref, oldInsp, newImg.ID, emit)
-	return m.finishApply(mc, jobID, at, err)
+	return m.finishApply(mc, jobID, src, target, err)
 }
 
 // finishApply records the outcome of a helper-run update and notifies. A
 // failure is counted against the version like an in-process one; nothing is
 // broadcast, because this process has no clients connected to it.
-func (m *Manager) finishApply(mc store.ManagedContainer, jobID string, at updateAttempt, err error) error {
+func (m *Manager) finishApply(mc store.ManagedContainer, jobID string, src api.Source, target string, err error) error {
 	name := mc.ContainerName
 	if err != nil {
 		if jobID != "" {
@@ -159,7 +160,7 @@ func (m *Manager) finishApply(mc store.ManagedContainer, jobID string, at update
 		}
 		m.notify(api.EventUpdateApplied, "Update failed: "+name, err.Error(),
 			api.EventMeta{ContainerName: name, StackID: mc.StackID})
-		m.noteUpdateFailure(mc, at, err)
+		m.noteUpdateFailure(mc, src, target, err)
 		return err
 	}
 	if jobID != "" {
