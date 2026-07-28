@@ -175,7 +175,7 @@ func (m *Manager) noteUpdateFailure(mc store.ManagedContainer, at updateAttempt,
 		return false
 	}
 
-	if err := m.st.SetAutoUpdate(mc.ID, false); err != nil {
+	if err := m.st.StopAutoUpdate(mc.ID); err != nil {
 		log.Printf("auto-update: turn off for %s: %v", mc.ContainerName, err)
 		return false
 	}

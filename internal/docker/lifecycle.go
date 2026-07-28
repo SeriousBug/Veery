@@ -100,13 +100,14 @@ func (m *Manager) ListStacks(ctx context.Context) ([]api.Stack, error) {
 			status, state = api.StatusUpdating, "updating"
 		}
 		st.Containers = append(st.Containers, api.Container{
-			ID:            mc.ID,
-			Name:          mc.ContainerName,
-			ContainerName: mc.ContainerName,
-			Status:        status,
-			State:         state,
-			Managed:       true,
-			AutoUpdate:    mc.AutoUpdate,
+			ID:                mc.ID,
+			Name:              mc.ContainerName,
+			ContainerName:     mc.ContainerName,
+			Status:            status,
+			State:             state,
+			Managed:           true,
+			AutoUpdate:        mc.AutoUpdate,
+			AutoUpdateStopped: mc.AutoUpdateStopped,
 		})
 	}
 
@@ -139,16 +140,17 @@ func buildContainer(c container.Summary, name string, managed bool, mc store.Man
 		health = "healthy"
 	}
 	return api.Container{
-		ID:            c.ID,
-		Name:          friendly,
-		ContainerName: name,
-		Image:         c.Image,
-		State:         c.State,
-		Status:        mapStatus(c.State, health, exitCodeFromStatus(c.Status)),
-		Health:        health,
-		Managed:       managed,
-		AutoUpdate:    mc.AutoUpdate,
-		CreatedAt:     c.Created,
+		ID:                c.ID,
+		Name:              friendly,
+		ContainerName:     name,
+		Image:             c.Image,
+		State:             c.State,
+		Status:            mapStatus(c.State, health, exitCodeFromStatus(c.Status)),
+		Health:            health,
+		Managed:           managed,
+		AutoUpdate:        mc.AutoUpdate,
+		AutoUpdateStopped: mc.AutoUpdateStopped,
+		CreatedAt:         c.Created,
 	}
 }
 

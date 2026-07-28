@@ -97,8 +97,7 @@ func (m *Manager) checkUpdates(ctx context.Context, managed []store.ManagedConta
 			// own and reports its outcome, so announcing it here is noise.
 			if avail && !mc.AutoUpdate {
 				m.notify(api.EventUpdateAvailable, "Update available for "+mc.ContainerName,
-					"A newer image has been published. Auto-update is off for this container, so it will keep running the current image until you update it.",
-					api.EventMeta{ContainerName: mc.ContainerName, StackID: mc.StackID})
+					updateAvailableBody(mc), api.EventMeta{ContainerName: mc.ContainerName, StackID: mc.StackID})
 			}
 		}
 		m.setUpdateAvailable(mc.ContainerName, avail)
@@ -108,6 +107,16 @@ func (m *Manager) checkUpdates(ctx context.Context, managed []store.ManagedConta
 		m.BroadcastStacks(ctx)
 	}
 	return available
+}
+
+// updateAvailableBody says why the container is not installing this update
+// itself. Auto-update being off because Veery gave up is not the same news as
+// auto-update being off because the user wants to install updates by hand.
+func updateAvailableBody(mc store.ManagedContainer) string {
+	if mc.AutoUpdateStopped {
+		return "A newer image has been published. Auto-update is off for this container because Veery turned it off, after version after version failed to install, so it will keep running the current image until you look at it."
+	}
+	return "A newer image has been published. Auto-update is off for this container, so it will keep running the current image until you update it."
 }
 
 // seedUpdateAvail loads the update-available flags recorded by the last sweep,

@@ -120,6 +120,13 @@ var migrations = []string{
 	// be about to record was an automatic attempt, and at which version.
 	`ALTER TABLE update_jobs ADD COLUMN auto INTEGER NOT NULL DEFAULT 0;`,
 	`ALTER TABLE update_jobs ADD COLUMN target TEXT NOT NULL DEFAULT '';`,
+	// auto_update_stopped separates the two ways auto-update ends up off: the
+	// user turned it off, or Veery did because version after version failed to
+	// install. They mean opposite things — one is a settled choice, the other is
+	// a service that is stuck and needs looking at — so the UI has to be able to
+	// tell them apart. Only ever set while auto_update is 0, and cleared the
+	// moment the user turns it back on.
+	`ALTER TABLE managed_containers ADD COLUMN auto_update_stopped INTEGER NOT NULL DEFAULT 0;`,
 }
 
 func (s *Store) migrate() error {

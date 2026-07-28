@@ -62,6 +62,14 @@ export interface Container {
   health: string;
   managed: boolean;
   autoUpdate: boolean;
+  /**
+   * AutoUpdateStopped says AutoUpdate is off because Veery turned it off, one
+   * failed version after another, rather than because the user chose to. The
+   * two look the same in a toggle and mean opposite things: one is a settled
+   * choice, the other is a service that is stuck and stays behind until
+   * somebody looks at it.
+   */
+  autoUpdateStopped: boolean;
   updateAvailable: boolean;
   restartCount: number /* int */;
   createdAt: number /* int64 */;

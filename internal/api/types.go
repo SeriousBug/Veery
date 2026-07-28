@@ -45,18 +45,24 @@ type Invite struct {
 
 // Container is a single managed or discovered container.
 type Container struct {
-	ID              string          `json:"id"`
-	Name            string          `json:"name"`
-	ContainerName   string          `json:"containerName"`
-	Image           string          `json:"image"`
-	State           string          `json:"state"`
-	Status          ContainerStatus `json:"status"`
-	Health          string          `json:"health"`
-	Managed         bool            `json:"managed"`
-	AutoUpdate      bool            `json:"autoUpdate"`
-	UpdateAvailable bool            `json:"updateAvailable"`
-	RestartCount    int             `json:"restartCount"`
-	CreatedAt       int64           `json:"createdAt"`
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	ContainerName string          `json:"containerName"`
+	Image         string          `json:"image"`
+	State         string          `json:"state"`
+	Status        ContainerStatus `json:"status"`
+	Health        string          `json:"health"`
+	Managed       bool            `json:"managed"`
+	AutoUpdate    bool            `json:"autoUpdate"`
+	// AutoUpdateStopped says AutoUpdate is off because Veery turned it off, one
+	// failed version after another, rather than because the user chose to. The
+	// two look the same in a toggle and mean opposite things: one is a settled
+	// choice, the other is a service that is stuck and stays behind until
+	// somebody looks at it.
+	AutoUpdateStopped bool  `json:"autoUpdateStopped"`
+	UpdateAvailable   bool  `json:"updateAvailable"`
+	RestartCount      int   `json:"restartCount"`
+	CreatedAt         int64 `json:"createdAt"`
 }
 
 // Stack groups containers by compose project (or manual grouping).

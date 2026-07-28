@@ -104,3 +104,57 @@ func TestUpdateJobCarriesAttempt(t *testing.T) {
 		t.Errorf("job auto=%v target=%q, want true/sha256:aaa", j.Auto, j.Target)
 	}
 }
+
+// Auto-update off because the user turned it off, and off because Veery gave
+// up on it, are different states: the UI has to be able to say which.
+func TestStopAutoUpdateIsDistinctFromTurningItOff(t *testing.T) {
+	st := testStore(t)
+	add(t, st, "m1", "web", "web-1")
+
+	if err := st.SetAutoUpdate("m1", true); err != nil {
+		t.Fatalf("set auto-update: %v", err)
+	}
+	if err := st.StopAutoUpdate("m1"); err != nil {
+		t.Fatalf("stop auto-update: %v", err)
+	}
+	mc, err := st.ManagedByID("m1")
+	if err != nil {
+		t.Fatalf("load managed: %v", err)
+	}
+	if mc.AutoUpdate || !mc.AutoUpdateStopped {
+		t.Errorf("after Veery stopped it: autoUpdate=%v stopped=%v, want false/true", mc.AutoUpdate, mc.AutoUpdateStopped)
+	}
+	// The container is no longer polled either way.
+	list, err := st.AutoUpdateContainers()
+	if err != nil {
+		t.Fatalf("list auto-update: %v", err)
+	}
+	if len(list) != 0 {
+		t.Errorf("got %d auto-updating containers, want 0", len(list))
+	}
+
+	// Turning it back on is the user taking it over again, so the flag goes.
+	if err := st.SetAutoUpdate("m1", true); err != nil {
+		t.Fatalf("set auto-update: %v", err)
+	}
+	mc, err = st.ManagedByID("m1")
+	if err != nil {
+		t.Fatalf("load managed: %v", err)
+	}
+	if !mc.AutoUpdate || mc.AutoUpdateStopped {
+		t.Errorf("after the user turned it on: autoUpdate=%v stopped=%v, want true/false", mc.AutoUpdate, mc.AutoUpdateStopped)
+	}
+
+	// The user turning it off is their own choice, and must not read as Veery
+	// giving up on it.
+	if err := st.SetAutoUpdate("m1", false); err != nil {
+		t.Fatalf("set auto-update: %v", err)
+	}
+	mc, err = st.ManagedByID("m1")
+	if err != nil {
+		t.Fatalf("load managed: %v", err)
+	}
+	if mc.AutoUpdate || mc.AutoUpdateStopped {
+		t.Errorf("after the user turned it off: autoUpdate=%v stopped=%v, want false/false", mc.AutoUpdate, mc.AutoUpdateStopped)
+	}
+}

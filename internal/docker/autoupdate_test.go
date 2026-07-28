@@ -87,6 +87,11 @@ func TestAutoUpdateTurnsItselfOffAfterEnoughFailedVersions(t *testing.T) {
 	if got.AutoUpdate {
 		t.Error("auto-update should be off after every version failed")
 	}
+	// Off because Veery gave up, not because the user chose to: the UI shows the
+	// two differently.
+	if !got.AutoUpdateStopped {
+		t.Error("auto-update should be marked as stopped by Veery, not by the user")
+	}
 	// One alert per written-off version, and the last one is the switch-off.
 	if len(notif.events) != maxFailedVersions {
 		t.Fatalf("got %d alerts, want %d", len(notif.events), maxFailedVersions)

@@ -48,6 +48,16 @@ Both are announced under the `auto_update_stopped` event, its own alert category
 one update event that needs the user to do something: a service that has quietly stopped updating is
 exactly what auto-update was turned on to prevent.
 
+### Off by choice vs. off because Veery gave up
+
+A toggle that is off looks the same either way and means opposite things: one is a settled choice,
+the other is a service that is stuck and stays behind until somebody looks at it. So the two are
+stored apart. `managed_containers.auto_update_stopped` is set only by `StopAutoUpdate`, which is
+what the auto-updater calls; `SetAutoUpdate` — the user's own toggle, in either direction — always
+clears it. It rides out on `api.Container.AutoUpdateStopped`, and `AutoUpdateToggle` turns the card
+red and explains what happened and where to look, rather than presenting an off switch with no
+explanation. The "update available" notification says which of the two it is for the same reason.
+
 Counts live in `update_failures` (`internal/store/update_failures.go`), keyed by container name and
 target digest. They are dropped when an update succeeds, when the user turns auto-update back on
 (that is the user saying to start over), and when the container stops being managed.
