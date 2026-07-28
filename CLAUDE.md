@@ -23,7 +23,9 @@ static Go binary with the web UI embedded (distroless/static base).
 - `internal/auth/`: WebAuthn, invites, sessions, users.
 - `internal/store/`: SQLite persistence (`accessors.go`).
 - `internal/docker/`, `internal/metrics/`: container management and host/container metrics.
-  Updates are transactional and Veery updates itself via a helper container, see `docs/updates.md`.
+  Updates are transactional and Veery updates itself via a helper container; auto-update gives up on
+  a version that keeps failing and turns itself off for a container when version after version
+  fails (`auto_update_stopped` alerts), see `docs/updates.md`.
   Containers are the user's to create and edit (Veery only adopts them), so `reconcile.go` picks up
   what they change behind Veery's back, see `docs/reconcile.md`. Optional mdadm (Linux software
   RAID) health reads `${HOST_PROC}/mdstat` + `${HOST_SYS}/block/*/md/` (`mdadm.go`, no `mdadm`

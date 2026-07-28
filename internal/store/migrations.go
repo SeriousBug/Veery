@@ -99,6 +99,27 @@ var migrations = []string{
 	// or by the service a row names.
 	`CREATE INDEX idx_events_created_at ON events(created_at DESC, id DESC);`,
 	`CREATE INDEX idx_events_container ON events(container_name);`,
+	// update_failures counts how often auto-update has failed to install one
+	// version on one container, so a version that cannot be installed is retried
+	// a few times and then left alone instead of breaking the service on every
+	// poll. Keyed by container name (which survives the recreation an update is)
+	// and by the digest the registry served, so a newly published version starts
+	// with a clean count. Rows are dropped when an update finally succeeds.
+	`CREATE TABLE update_failures (
+		container_name TEXT NOT NULL,
+		target TEXT NOT NULL,
+		failures INTEGER NOT NULL DEFAULT 0,
+		last_error TEXT NOT NULL DEFAULT '',
+		first_at INTEGER NOT NULL,
+		last_at INTEGER NOT NULL,
+		PRIMARY KEY (container_name, target)
+	);`,
+	// auto and target carry the kind of update a job is across a self-update
+	// handoff: the helper container that finishes the job is a different process
+	// from the one that started it, and it has to know whether the failure it may
+	// be about to record was an automatic attempt, and at which version.
+	`ALTER TABLE update_jobs ADD COLUMN auto INTEGER NOT NULL DEFAULT 0;`,
+	`ALTER TABLE update_jobs ADD COLUMN target TEXT NOT NULL DEFAULT '';`,
 }
 
 func (s *Store) migrate() error {

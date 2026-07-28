@@ -28,6 +28,41 @@ interrupted, which is what `Recover` keys off.
 A bad image therefore cannot leave a service down. The confirm dialog in the UI promises this, so it
 is a guarantee, not a best effort.
 
+## Giving up on an update
+
+An update that fails is rolled back, so the service survives it — but the poller comes back on the
+next interval and tries the same broken image again, taking the service down and bringing it back
+every hour, forever. `internal/docker/autoupdate.go` bounds that, in two steps:
+
+- **Per version.** After `maxVersionAttempts` (3) failed auto-updates onto the same version, that
+  version is written off: the poller skips it until the registry serves a different one. The version
+  is identified by the digest the registry reports for the container's image tag
+  (`targetVersion`, the same `DistributionInspect` the update check uses), so a newly published
+  release starts on a clean count. One bad release is the normal case and the next one usually
+  fixes it.
+- **Per container.** When `maxFailedVersions` (3) versions in a row have been written off, the
+  problem is not the release: the container cannot come up on a new image at all. Auto-update is
+  switched off for it and it keeps running the version it is on, until the user turns it back on.
+
+Both are announced under the `auto_update_stopped` event, its own alert category because it is the
+one update event that needs the user to do something: a service that has quietly stopped updating is
+exactly what auto-update was turned on to prevent.
+
+Counts live in `update_failures` (`internal/store/update_failures.go`), keyed by container name and
+target digest. They are dropped when an update succeeds, when the user turns auto-update back on
+(that is the user saying to start over), and when the container stops being managed.
+
+Two attempts are deliberately **not** counted:
+
+- A **manual** update. Someone is watching the outcome and can decide for themselves whether to try
+  again; a person retrying a broken image must not be what turns their auto-updates off.
+- One where the registry could not be reached, so `targetVersion` is empty. There is no version to
+  blame, and a network outage must not read as three bad releases.
+
+A self-update is counted like any other, even though the process that finishes it is not the one
+that started it: the `auto` and `target` columns on `update_jobs` carry the attempt across the
+handoff for `ApplyUpdate` to read back.
+
 ## Veery updating itself
 
 Veery cannot swap its own container in-process. Parking it means stopping it, and stopping it kills

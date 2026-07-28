@@ -9,6 +9,7 @@ import {
   Loader2,
   PackageMinus,
   PackagePlus,
+  PauseCircle,
   ScrollText,
   Search,
 } from "lucide-react";
@@ -19,6 +20,7 @@ import { wsClient } from "../api/ws";
 import { useLiveData } from "../live/LiveData";
 import {
   EventAuth,
+  EventAutoUpdateStopped,
   EventContainerAdopted,
   EventContainerMissing,
   EventContainerStatus,
@@ -41,6 +43,7 @@ const EVENT_META: Record<
   [EventContainerAdopted]: { label: "Adopted", icon: PackagePlus, bg: "mint.300", fg: "ink.900" },
   [EventUpdateApplied]: { label: "Update", icon: ArrowUpCircle, bg: "grape.100", fg: "grape.700" },
   [EventUpdateAvailable]: { label: "Update available", icon: Download, bg: "sunshine.300", fg: "ink.900" },
+  [EventAutoUpdateStopped]: { label: "Auto-update stopped", icon: PauseCircle, bg: "coral.100", fg: "coral.600" },
   [EventAuth]: { label: "Account", icon: KeyRound, bg: "ink.100", fg: "textMuted" },
 };
 
@@ -51,6 +54,7 @@ const FILTERS: { value: NotificationEvent | ""; label: string }[] = [
   { value: EventContainerAdopted, label: "Adoptions" },
   { value: EventUpdateApplied, label: "Updates" },
   { value: EventUpdateAvailable, label: "Updates available" },
+  { value: EventAutoUpdateStopped, label: "Auto-update stopped" },
   { value: EventAuth, label: "Account" },
 ];
 

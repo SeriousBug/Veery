@@ -173,8 +173,8 @@ func (s *Store) DeleteManagedContainer(id string) error {
 	}
 	defer tx.Rollback()
 
-	var stackID string
-	err = tx.QueryRow(`SELECT stack_id FROM managed_containers WHERE id=?`, id).Scan(&stackID)
+	var stackID, name string
+	err = tx.QueryRow(`SELECT stack_id,container_name FROM managed_containers WHERE id=?`, id).Scan(&stackID, &name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -182,6 +182,12 @@ func (s *Store) DeleteManagedContainer(id string) error {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM managed_containers WHERE id=?`, id); err != nil {
+		return err
+	}
+	// The failure counts are keyed by name rather than by a foreign key, so they
+	// have to be dropped here or they would be inherited by a container that
+	// takes the name later.
+	if _, err := tx.Exec(`DELETE FROM update_failures WHERE container_name=?`, name); err != nil {
 		return err
 	}
 	var left int

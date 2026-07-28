@@ -29,6 +29,13 @@ const verifyTimeout = 15 * time.Second
 // persisted, and it is safe to call from a goroutine with a context that
 // outlives the request that triggered it.
 func (m *Manager) Update(ctx context.Context, managedID string) {
+	m.update(ctx, managedID, updateAttempt{})
+}
+
+// update is Update with the bookkeeping the auto-updater needs: at says whether
+// the attempt was automatic and which version it installs, which is what a
+// failure gets counted against (see noteUpdateFailure).
+func (m *Manager) update(ctx context.Context, managedID string, at updateAttempt) {
 	mc, err := m.st.ResolveManaged(managedID)
 	if err != nil {
 		m.job(ctx, "update", managedID, func(emit func(phase, msg string)) error {
@@ -42,6 +49,8 @@ func (m *Manager) Update(ctx context.Context, managedID string) {
 		ID:            id,
 		ContainerName: mc.ContainerName,
 		Phase:         "start",
+		Auto:          at.Auto,
+		Target:        at.Target,
 	}); err != nil {
 		log.Printf("update: record job: %v", err)
 	}
@@ -61,8 +70,13 @@ func (m *Manager) Update(ctx context.Context, managedID string) {
 			_ = m.st.FinishUpdateJob(id, "failed", "", err.Error())
 			m.notify(api.EventUpdateApplied, "Update failed: "+mc.ContainerName, err.Error(),
 				api.EventMeta{ContainerName: mc.ContainerName, StackID: mc.StackID})
+			if m.noteUpdateFailure(mc, at, err) {
+				// Auto-update was switched off; the toggle in the UI is now stale.
+				m.BroadcastStacks(ctx)
+			}
 		case updated:
 			_ = m.st.FinishUpdateJob(id, "done", "Updated", "")
+			m.clearUpdateFailures(mc.ContainerName)
 			m.notify(api.EventUpdateApplied, "Updated "+mc.ContainerName, "The container is running a newer image and came up healthy.",
 				api.EventMeta{ContainerName: mc.ContainerName, StackID: mc.StackID})
 		default:

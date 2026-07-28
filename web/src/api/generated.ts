@@ -356,6 +356,14 @@ export const EventUpdateApplied: NotificationEvent = "update_applied";
  */
 export const EventUpdateAvailable: NotificationEvent = "update_available";
 /**
+ * EventAutoUpdateStopped fires when auto-update gives up: on one version that
+ * has failed to install too many times, and on the container as a whole when
+ * version after version fails, at which point auto-update is switched off for
+ * it. It is its own category because it is the one update event that needs
+ * the user to do something.
+ */
+export const EventAutoUpdateStopped: NotificationEvent = "auto_update_stopped";
+/**
  * EventContainerStatus fires when a managed container changes status, e.g.
  * starts crash-looping, goes unhealthy, stops, or recovers.
  */

@@ -28,6 +28,11 @@ export const EVENTS: { event: NotificationEvent; title: string; hint: string }[]
     hint: "A newer version is out for a service that doesn't update itself.",
   },
   {
+    event: "auto_update_stopped",
+    title: "Auto-update gave up",
+    hint: "A new version fails to install however many times Veery retries it, so Veery stops retrying — and if version after version fails, it turns auto-update off for that service.",
+  },
+  {
     event: "auth",
     title: "Sign-ins and passkeys",
     hint: "Someone signs in, or a new passkey is enrolled.",

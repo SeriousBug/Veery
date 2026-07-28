@@ -19,19 +19,28 @@ type UpdateJob struct {
 	Error         string
 	Self          bool
 	Done          bool
-	StartedAt     int64
-	FinishedAt    int64
+	// Auto says the update was started by the auto-update poller rather than by
+	// a person, and Target names the version it is installing. Together they are
+	// what lets a failure be counted against a version, by whichever process
+	// ends up finishing the job.
+	Auto       bool
+	Target     string
+	StartedAt  int64
+	FinishedAt int64
 }
+
+const jobCols = `id,container_name,image,phase,message,error,is_self,done,auto,target,started_at,finished_at`
 
 // StartUpdateJob records a new in-flight update.
 func (s *Store) StartUpdateJob(j UpdateJob) error {
 	if j.StartedAt == 0 {
 		j.StartedAt = time.Now().Unix()
 	}
-	_, err := s.db.Exec(`INSERT INTO update_jobs(id,container_name,image,phase,message,is_self,done,started_at)
-		VALUES(?,?,?,?,?,?,0,?)
+	_, err := s.db.Exec(`INSERT INTO update_jobs(id,container_name,image,phase,message,is_self,done,auto,target,started_at)
+		VALUES(?,?,?,?,?,?,0,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET phase=excluded.phase, message=excluded.message`,
-		j.ID, j.ContainerName, j.Image, j.Phase, j.Message, boolInt(j.Self), j.StartedAt)
+		j.ID, j.ContainerName, j.Image, j.Phase, j.Message, boolInt(j.Self),
+		boolInt(j.Auto), j.Target, j.StartedAt)
 	return err
 }
 
@@ -58,7 +67,7 @@ func (s *Store) FinishUpdateJob(id, phase, message, errMsg string) error {
 
 // UpdateJobByID returns one update job.
 func (s *Store) UpdateJobByID(id string) (UpdateJob, error) {
-	row := s.db.QueryRow(`SELECT id,container_name,image,phase,message,error,is_self,done,started_at,finished_at
+	row := s.db.QueryRow(`SELECT `+jobCols+`
 		FROM update_jobs WHERE id=?`, id)
 	j, err := scanUpdateJob(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -69,7 +78,7 @@ func (s *Store) UpdateJobByID(id string) (UpdateJob, error) {
 
 // ActiveUpdateJobs returns every update that has not reported a final state.
 func (s *Store) ActiveUpdateJobs() ([]UpdateJob, error) {
-	rows, err := s.db.Query(`SELECT id,container_name,image,phase,message,error,is_self,done,started_at,finished_at
+	rows, err := s.db.Query(`SELECT ` + jobCols + `
 		FROM update_jobs WHERE done=0 ORDER BY started_at`)
 	if err != nil {
 		return nil, err
@@ -91,7 +100,7 @@ func (s *Store) ActiveUpdateJobs() ([]UpdateJob, error) {
 // so the outcome has to be readable after the fact or the UI is left showing a
 // spinner for an update that is long done.
 func (s *Store) RecentUpdateJobs(since int64) ([]UpdateJob, error) {
-	rows, err := s.db.Query(`SELECT id,container_name,image,phase,message,error,is_self,done,started_at,finished_at
+	rows, err := s.db.Query(`SELECT `+jobCols+`
 		FROM update_jobs WHERE done=1 AND finished_at>=? ORDER BY finished_at`, since)
 	if err != nil {
 		return nil, err
@@ -114,10 +123,11 @@ type scanner interface {
 
 func scanUpdateJob(row scanner) (UpdateJob, error) {
 	var j UpdateJob
-	var isSelf, done int
+	var isSelf, done, auto int
 	err := row.Scan(&j.ID, &j.ContainerName, &j.Image, &j.Phase, &j.Message, &j.Error,
-		&isSelf, &done, &j.StartedAt, &j.FinishedAt)
+		&isSelf, &done, &auto, &j.Target, &j.StartedAt, &j.FinishedAt)
 	j.Self = isSelf != 0
 	j.Done = done != 0
+	j.Auto = auto != 0
 	return j, err
 }

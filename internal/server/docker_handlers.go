@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/SeriousBug/Veery/internal/api"
@@ -195,6 +196,13 @@ func (s *Server) handleSetAutoUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.SetAutoUpdate(mc.ID, req.AutoUpdate); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	// Turning auto-update on is the user saying to start over, including after
+	// Veery turned it off because version after version failed to install.
+	if req.AutoUpdate {
+		if err := s.store.ClearUpdateFailures(mc.ContainerName); err != nil {
+			log.Printf("auto-update: clear failures for %s: %v", mc.ContainerName, err)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

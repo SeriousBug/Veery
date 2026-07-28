@@ -8,7 +8,8 @@ into a table so there is a searchable history of what happened to each service.
 
 Everything that passes through `Notifier.Notify` (`internal/notify/notify.go`):
 container status changes, removals, adoptions, update results, updates
-available, and auth events. Recording happens in `Notify`, before the
+available, auto-update giving up (see `docs/updates.md`), RAID health, and auth
+events. Recording happens in `Notify`, before the
 delivery decision, so **a muted event is still recorded**. Muting a channel is
 about interruption, not about whether the thing happened. That is what makes it
 safe to turn an event (e.g. `container_missing`) off for delivery: the log keeps
