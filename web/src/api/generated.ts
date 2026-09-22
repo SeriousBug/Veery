@@ -18,7 +18,8 @@ export const StatusNeedsAttention: ContainerStatus = "needs_attention";
 export const StatusUpdating: ContainerStatus = "updating";
 export const StatusMissing: ContainerStatus = "missing";
 /**
- * User is an account. Passkey-only; no password ever stored.
+ * User is an account. Authenticated by passkey, an external OIDC identity, or
+ * both; no password is ever stored.
  */
 export interface User {
   id: string;
@@ -286,6 +287,20 @@ export interface WSMessage {
 export interface SessionInfo {
   user: User;
   credentials: Credential[];
+}
+/**
+ * AuthProviders describes the sign-in methods this instance offers, so the login
+ * page can render the right buttons without knowing the server's OIDC config.
+ */
+export interface AuthProviders {
+  /**
+   * OIDC is true when an external OIDC provider is configured.
+   */
+  oidc: boolean;
+  /**
+   * OIDCName is the provider label, e.g. "Pocket ID". Empty when OIDC is off.
+   */
+  oidcName?: string;
 }
 /**
  * CreateInviteRequest asks for a new enrollment link.

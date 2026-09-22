@@ -16,7 +16,8 @@ const (
 	StatusMissing        ContainerStatus = "missing"
 )
 
-// User is an account. Passkey-only; no password ever stored.
+// User is an account. Authenticated by passkey, an external OIDC identity, or
+// both; no password is ever stored.
 type User struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
@@ -253,6 +254,15 @@ type WSMessage struct {
 type SessionInfo struct {
 	User        User         `json:"user"`
 	Credentials []Credential `json:"credentials"`
+}
+
+// AuthProviders describes the sign-in methods this instance offers, so the login
+// page can render the right buttons without knowing the server's OIDC config.
+type AuthProviders struct {
+	// OIDC is true when an external OIDC provider is configured.
+	OIDC bool `json:"oidc"`
+	// OIDCName is the provider label, e.g. "Pocket ID". Empty when OIDC is off.
+	OIDCName string `json:"oidcName,omitempty"`
 }
 
 // CreateInviteRequest asks for a new enrollment link.

@@ -12,6 +12,7 @@ import (
 	"github.com/SeriousBug/Veery/internal/auth"
 	"github.com/SeriousBug/Veery/internal/docker"
 	"github.com/SeriousBug/Veery/internal/notify"
+	"github.com/SeriousBug/Veery/internal/oidc"
 	"github.com/SeriousBug/Veery/internal/store"
 	"github.com/SeriousBug/Veery/web"
 )
@@ -33,6 +34,7 @@ type Server struct {
 	mux   *http.ServeMux
 	dkr   *docker.Manager
 	notif *notify.Notifier
+	oidc  *oidc.Manager
 }
 
 // SetDocker attaches the Docker manager used by container/stack handlers. It is
@@ -42,6 +44,10 @@ func (s *Server) SetDocker(m *docker.Manager) { s.dkr = m }
 // SetNotifier attaches the notifier used by the notification handlers and the
 // auth events. Set after New, like SetDocker.
 func (s *Server) SetNotifier(n *notify.Notifier) { s.notif = n }
+
+// SetOIDC attaches the external identity provider used by the OIDC login
+// handlers. Set after New, like SetDocker. A nil manager leaves OIDC disabled.
+func (s *Server) SetOIDC(m *oidc.Manager) { s.oidc = m }
 
 // notify delivers an event if a notifier is attached.
 func (s *Server) notify(ev api.NotificationEvent, title, body string) {
@@ -86,6 +92,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /auth/login/finish", s.handleLoginFinish)
 	s.mux.HandleFunc("POST /auth/logout", s.handleLogout)
 	s.mux.HandleFunc("GET /auth/me", s.requireAuth(s.handleMe))
+	// External OIDC login (public). Enabled only when configured; the handlers
+	// 404 otherwise. handleAuthProviders lets the login page discover it.
+	s.mux.HandleFunc("GET /auth/providers", s.handleAuthProviders)
+	s.mux.HandleFunc("GET /auth/oidc/start", s.handleOIDCStart)
+	s.mux.HandleFunc("GET /auth/oidc/callback", s.handleOIDCCallback)
 
 	// Invites (admin).
 	s.mux.HandleFunc("GET /api/invites", s.requireAdmin(s.handleListInvites))
