@@ -46,7 +46,13 @@ const indexRoute = createRoute({
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
-  component: Login,
+  // The OIDC callback redirects here with a short error code on failure.
+  validateSearch: (search: Record<string, unknown>): { error?: string } =>
+    typeof search.error === "string" ? { error: search.error } : {},
+  component: function LoginRoute() {
+    const { error } = loginRoute.useSearch();
+    return <Login ssoError={error} />;
+  },
 });
 
 const enrollRoute = createRoute({

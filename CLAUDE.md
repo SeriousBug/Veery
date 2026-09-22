@@ -1,6 +1,6 @@
 # Veery
 
-Self-hosted web app to manage Docker containers, with passkey-only login. Ships as a single
+Self-hosted web app to manage Docker containers, with passkey-first login (optional OIDC SSO). Ships as a single
 static Go binary with the web UI embedded (distroless/static base).
 
 ## Stack
@@ -9,8 +9,10 @@ static Go binary with the web UI embedded (distroless/static base).
   stdlib `net/http` mux with method+path patterns (e.g. `"DELETE /api/users/{id}"`).
 - **Frontend:** TypeScript + React 19 SPA in `web/`. TanStack Router + TanStack Query, Ark UI
   components, Panda CSS for styling, `lucide-react` icons, Vite build. Package manager is `pnpm`.
-- **Auth:** WebAuthn passkeys only, no passwords. Session cookie. First run prints a one-time
-  admin enrollment link to the logs; admins mint single-use invite links from the UI.
+- **Auth:** WebAuthn passkeys, no passwords, plus optional OIDC single sign-on. Session cookie.
+  First run prints a one-time admin enrollment link to the logs; admins mint single-use invite
+  links from the UI. OIDC is additive and off unless `VEERY_OIDC_ISSUER`/`VEERY_OIDC_CLIENT_ID`
+  are set; see `docs/oidc.md`.
 
 ## Layout
 
@@ -21,7 +23,12 @@ static Go binary with the web UI embedded (distroless/static base).
 - `internal/server/`: HTTP handlers, routing (`server.go`), auth middleware (`middleware.go`,
   `requireAuth`/`requireAdmin`), auth handlers (`auth_handlers.go`).
 - `internal/auth/`: WebAuthn, invites, sessions, users.
-- `internal/store/`: SQLite persistence (`accessors.go`).
+- `internal/oidc/`: OIDC relying party. Provider-agnostic (pocket-id, Keycloak, ...); discovers the
+  provider, runs the authorization-code + PKCE flow, verifies the ID token, and returns the claims
+  the server maps to a user. `internal/oidc/fakeidp/` is the in-process test provider. Server
+  handlers (`oidc_handlers.go`) find or provision the user and sync admin from groups; see
+  `docs/oidc.md`.
+- `internal/store/`: SQLite persistence (`accessors.go`, `oidc.go` for `oidc_identities`).
 - `internal/docker/`, `internal/metrics/`: container management and host/container metrics.
   Updates are transactional and Veery updates itself via a helper container, see `docs/updates.md`.
   Containers are the user's to create and edit (Veery only adopts them), so `reconcile.go` picks up

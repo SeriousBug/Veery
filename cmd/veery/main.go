@@ -18,6 +18,7 @@ import (
 	"github.com/SeriousBug/Veery/internal/docker"
 	"github.com/SeriousBug/Veery/internal/metrics"
 	"github.com/SeriousBug/Veery/internal/notify"
+	"github.com/SeriousBug/Veery/internal/oidc"
 	"github.com/SeriousBug/Veery/internal/raidwatch"
 	"github.com/SeriousBug/Veery/internal/server"
 	"github.com/SeriousBug/Veery/internal/store"
@@ -87,6 +88,17 @@ func main() {
 		Origin: origin,
 		Secure: strings.HasPrefix(origin, "https://"),
 	})
+
+	// External OIDC login is optional and additive: passkeys keep working either
+	// way. A bad config is fatal so a typo does not silently disable SSO, but the
+	// provider itself is only contacted on the first login, so an outage at boot
+	// does not stop Veery from serving passkey logins.
+	if oidcMgr, err := newOIDC(origin); err != nil {
+		log.Fatalf("oidc config: %v", err)
+	} else if oidcMgr != nil {
+		srv.SetOIDC(oidcMgr)
+		log.Printf("oidc: login enabled via %s", oidcMgr.Issuer())
+	}
 
 	notifier := notify.New(st)
 	notifier.SetBroadcaster(srv.Hub())
@@ -242,6 +254,41 @@ func pollMetrics(ctx context.Context, dkr *docker.Manager, hub *server.Hub, st *
 		snap := api.MetricsSnapshot{Host: host, Containers: containers, At: time.Now().Unix()}
 		hub.Broadcast(api.WSMessage{Type: api.WSTypeMetrics, Metrics: &snap})
 	}
+}
+
+// newOIDC builds the external login manager from env, or returns nil when OIDC
+// is not configured (neither issuer nor client id set).
+func newOIDC(origin string) (*oidc.Manager, error) {
+	issuer := strings.TrimSpace(os.Getenv("VEERY_OIDC_ISSUER"))
+	clientID := strings.TrimSpace(os.Getenv("VEERY_OIDC_CLIENT_ID"))
+	if issuer == "" && clientID == "" {
+		return nil, nil
+	}
+	redirect := strings.TrimSpace(os.Getenv("VEERY_OIDC_REDIRECT_URL"))
+	if redirect == "" {
+		redirect = strings.TrimRight(origin, "/") + "/auth/oidc/callback"
+	}
+	return oidc.New(oidc.Config{
+		Issuer:       issuer,
+		ClientID:     clientID,
+		ClientSecret: os.Getenv("VEERY_OIDC_CLIENT_SECRET"),
+		RedirectURL:  redirect,
+		Scopes:       splitList(os.Getenv("VEERY_OIDC_SCOPES")),
+		AdminGroups:  splitList(os.Getenv("VEERY_OIDC_ADMIN_GROUPS")),
+		ProviderName: strings.TrimSpace(os.Getenv("VEERY_OIDC_NAME")),
+	})
+}
+
+// splitList parses a comma- or whitespace-separated env value into a slice.
+func splitList(v string) []string {
+	fields := strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' || r == '\n' })
+	out := make([]string, 0, len(fields))
+	for _, f := range fields {
+		if f = strings.TrimSpace(f); f != "" {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func env(key, def string) string {

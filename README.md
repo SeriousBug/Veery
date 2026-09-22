@@ -1,16 +1,20 @@
 # Veery
 
-A self-hosted web app to manage your Docker containers, with passkey-only login (no passwords),
-service start/stop/restart, updates (manual and automatic), and live host and container resource
-metrics. It is meant for people who want to restart Home Assistant without learning Docker.
+A self-hosted web app to manage your Docker containers, with passkey-first login (no passwords,
+optional single sign-on), service start/stop/restart, updates (manual and automatic), and live host
+and container resource metrics. It is meant for people who want to restart Home Assistant without
+learning Docker.
 
 Veery ships as a single static Go binary with the web UI embedded, on a `distroless/static` base,
 so the image stays small.
 
 ## What it does
 
-- Passkey-only auth. There are no passwords to phish or brute-force. The first run prints a
+- Passkey-first auth. There are no passwords to phish or brute-force. The first run prints a
   one-time admin enrollment link to the logs; admins can then mint further single-use invite links.
+- Optional single sign-on. Point Veery at any OpenID Connect provider (pocket-id, Keycloak,
+  Authentik, ...) to let users sign in with the identity they already have, with group-based admin
+  mapping. Passkeys keep working alongside it. See [docs/oidc.md](docs/oidc.md).
 - Adopt, then manage. Veery snapshots each container's full create-spec from `docker inspect` and
   stores it. From then on it can stop, start, restart, or update a service, and recreate it from the
   snapshot if the container is removed or the host reboots.
@@ -56,6 +60,21 @@ snapshot. The "Bring back up" button recreates a stack from its stored snapshot.
 | `HOST_SYS`     | (unset)                 | Set to `/host/sys` likewise for host `/sys`.                                                                   |
 | `VEERY_NOTIFY_URLS` | (unset)            | Where to send notifications, as whitespace-separated [Shoutrrr](https://containrrr.dev/shoutrrr/v0.8/services/overview/) URLs. Setting this makes notifications read-only in the UI. |
 | `VEERY_NOTIFY_EVENTS` | (unset)          | Which events to send, comma-separated: `container_status`, `update_applied`, `update_available`, `auth`. Unset means all of them. Only read when `VEERY_NOTIFY_URLS` is set. |
+| `VEERY_OIDC_ISSUER` | (unset)            | Issuer URL of an OpenID Connect provider. Set with `VEERY_OIDC_CLIENT_ID` to enable SSO. See [docs/oidc.md](docs/oidc.md). |
+| `VEERY_OIDC_CLIENT_ID` | (unset)         | OIDC client id. |
+| `VEERY_OIDC_CLIENT_SECRET` | (unset)     | OIDC client secret (optional for public/PKCE clients). |
+| `VEERY_OIDC_REDIRECT_URL` | `${VEERY_ORIGIN}/auth/oidc/callback` | OIDC callback URL, must match the provider. |
+| `VEERY_OIDC_ADMIN_GROUPS` | (unset)       | Comma-separated provider groups whose members are Veery admins. |
+| `VEERY_OIDC_SCOPES` | `openid profile email` | Scopes to request; `groups` is added automatically when `VEERY_OIDC_ADMIN_GROUPS` is set. |
+| `VEERY_OIDC_NAME` | `SSO`                 | Label on the SSO login button, e.g. `Pocket ID`. |
+
+### Single sign-on (OIDC)
+
+Set `VEERY_OIDC_ISSUER` and `VEERY_OIDC_CLIENT_ID` to add a "Sign in with ..." button next to the
+passkey one. The first sign-in from an unknown account provisions a Veery user; with
+`VEERY_OIDC_ADMIN_GROUPS` set, admin rights are synced from the provider's `groups` claim on every
+login. Passkeys keep working, and the first user on a fresh instance is the admin whichever method
+they use. Full setup, including a pocket-id walkthrough, is in [docs/oidc.md](docs/oidc.md).
 
 ### Notifications
 
@@ -137,7 +156,10 @@ The link is single-use and valid for 24 hours. Open it to register a new passkey
 ## Security notes
 
 - Docker socket access is root-equivalent on the host. Anyone who can authenticate to Veery can
-  control your containers. Passkey-only auth is the gate, and there is no password fallback.
+  control your containers. Passkey auth is the gate, and there is no password fallback.
+- With OIDC enabled, anyone the provider authenticates to the Veery client is provisioned an
+  account, so restrict the client to the right users and groups at the provider. Admins are mapped
+  from `VEERY_OIDC_ADMIN_GROUPS`; the last admin is never demoted automatically.
 - Veery must run behind TLS: WebAuthn needs a secure context and the session cookie is `Secure`.
 - Invites are single-use and expiring. Sessions use random, expiring tokens in an `HttpOnly` cookie
   that JavaScript never sees. The same cookie authenticates the WebSocket upgrade.

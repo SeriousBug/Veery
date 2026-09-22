@@ -99,6 +99,22 @@ var migrations = []string{
 	// or by the service a row names.
 	`CREATE INDEX idx_events_created_at ON events(created_at DESC, id DESC);`,
 	`CREATE INDEX idx_events_container ON events(container_name);`,
+	// oidc_identities links a Veery user to an external OIDC identity. The key is
+	// (issuer, subject): the issuer pins which provider the subject belongs to, so
+	// two providers that both hand out small integer subjects cannot collide. It
+	// is a separate table rather than a users column because one user may
+	// eventually link identities from more than one provider, and because the
+	// identity must cascade away with the user.
+	`CREATE TABLE oidc_identities (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		issuer TEXT NOT NULL,
+		subject TEXT NOT NULL,
+		email TEXT NOT NULL DEFAULT '',
+		created_at INTEGER NOT NULL
+	);`,
+	`CREATE UNIQUE INDEX idx_oidc_identities_subject ON oidc_identities(issuer, subject);`,
+	`CREATE INDEX idx_oidc_identities_user ON oidc_identities(user_id);`,
 }
 
 func (s *Store) migrate() error {
