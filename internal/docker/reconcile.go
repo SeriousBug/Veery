@@ -44,7 +44,9 @@ func (m *Manager) Reconcile(ctx context.Context) {
 	}
 
 	changed := false
+	live := map[string]bool{}
 	for _, c := range summaries {
+		live[containerName(c.Names)] = true
 		if !isService(c) {
 			continue
 		}
@@ -60,17 +62,62 @@ func (m *Manager) Reconcile(ctx context.Context) {
 		changed = m.rerecord(ctx, mc, c.ID) || changed
 	}
 
+	for _, mc := range managed {
+		if !live[mc.ContainerName] && m.forgetComposeTemp(mc) {
+			changed = true
+		}
+	}
+
 	if changed {
 		m.BroadcastStacks(ctx)
 	}
 }
 
 // isService reports whether a container is one of the user's services rather
-// than Veery's own scaffolding: the helper that performs a self-update, or a
-// container parked mid-swap under its suffixed name.
+// than scaffolding: the helper that performs a self-update, a container parked
+// mid-swap under its suffixed name, or one docker compose is midway through
+// recreating.
 func isService(c container.Summary) bool {
+	name := containerName(c.Names)
 	return c.Labels[updaterLabel] != updaterRole &&
-		!strings.HasSuffix(containerName(c.Names), oldSuffix)
+		!strings.HasSuffix(name, oldSuffix) &&
+		!isComposeTemp(name, c.ID, c.Labels)
+}
+
+// isComposeTemp reports whether name is the temporary "<12-char id>_<name>"
+// that docker compose gives a container while it recreates a service. Older
+// compose parks the old container under its own id; newer compose creates the
+// replacement under the id of the container it replaces, recorded in the
+// replace label. Matching the id keeps a user's own "abc_def" name safe.
+func isComposeTemp(name, id string, labels map[string]string) bool {
+	prefix, _, ok := strings.Cut(name, "_")
+	if !ok || len(prefix) != 12 {
+		return false
+	}
+	return strings.HasPrefix(id, prefix) || strings.HasPrefix(labels[composeReplaceLabel], prefix)
+}
+
+// forgetComposeTemp drops a record of a compose temporary container that is
+// gone. Versions of Veery that did not recognise these adopted them when a
+// sweep caught a recreate midway, and they then read as removed services.
+func (m *Manager) forgetComposeTemp(mc store.ManagedContainer) bool {
+	snap, err := parseSnapshot(mc.SnapshotJSON)
+	if err != nil {
+		return false
+	}
+	var labels map[string]string
+	if snap.Config != nil {
+		labels = snap.Config.Labels
+	}
+	if !isComposeTemp(mc.ContainerName, mc.ContainerID, labels) {
+		return false
+	}
+	if err := m.st.DeleteManagedContainer(mc.ID); err != nil {
+		log.Printf("reconcile %s: forget compose temporary container: %v", mc.ContainerName, err)
+		return false
+	}
+	log.Printf("reconcile %s: forgot compose temporary container", mc.ContainerName)
+	return true
 }
 
 // adoptNew takes over a container that has appeared in a stack Veery already
