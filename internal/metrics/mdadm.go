@@ -1,12 +1,15 @@
 package metrics
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/SeriousBug/Veery/internal/api"
 )
@@ -91,9 +94,28 @@ func StartMdadmCheck(name string) error {
 	}
 	path := filepath.Join(hostSys(), "block", name, "md", "sync_action")
 	if err := os.WriteFile(path, []byte("check\n"), 0); err != nil {
-		return fmt.Errorf("start check on %s: %w (is /sys mounted writable?)", name, err)
+		return explainStartError(name, err)
+	}
+	// The kernel flags the check as needed before the write returns, so reading
+	// back anything else means the write was accepted but no scrub started.
+	if action := readSysAttr(name, "sync_action"); action != "check" {
+		return fmt.Errorf("start check on %s: wrote check to sync_action but the array reports %q", name, action)
 	}
 	return nil
+}
+
+// explainStartError names the setup problem behind a failed sync_action write,
+// since the raw errno alone doesn't say what to change on the container.
+func explainStartError(name string, err error) error {
+	switch {
+	case errors.Is(err, syscall.EROFS):
+		return fmt.Errorf("start check on %s: %w: the host /sys is mounted read-only, mount it writable", name, err)
+	case errors.Is(err, fs.ErrPermission):
+		return fmt.Errorf("start check on %s: %w: Veery must run as root with the SYS_ADMIN capability", name, err)
+	case errors.Is(err, syscall.EBUSY):
+		return fmt.Errorf("start check on %s: %w: another sync operation is running on the array", name, err)
+	}
+	return fmt.Errorf("start check on %s: %w", name, err)
 }
 
 // readSysAttr reads one sysfs md attribute, trimmed. Best effort: any error

@@ -161,6 +161,25 @@ type MdArray struct {
 	// finish on this array. The kernel keeps no such timestamp, so Veery records
 	// it when it observes a check return to idle. 0 means unknown (none seen yet).
 	LastScanAt int64 `json:"lastScanAt"`
+	// ScanFailure is set while Veery's last attempt to start a scrub on this
+	// array failed, and cleared once a scrub is seen running.
+	ScanFailure *MdScanFailure `json:"scanFailure"`
+}
+
+// MdScanFailure describes a data-scrub Veery tried to start and could not.
+type MdScanFailure struct {
+	// Error is why the kernel refused, e.g. missing permissions.
+	Error string `json:"error"`
+	// FirstAt and LastAt are the Unix times of the first and latest attempt.
+	FirstAt  int64 `json:"firstAt"`
+	LastAt   int64 `json:"lastAt"`
+	Attempts int   `json:"attempts"`
+	// NextRetryAt is when the scheduler tries again. 0 means it gave up, and the
+	// next scheduled occurrence starts a fresh attempt.
+	NextRetryAt int64 `json:"nextRetryAt"`
+	// Scheduled is false for a scrub an admin started by hand, which is not
+	// retried.
+	Scheduled bool `json:"scheduled"`
 }
 
 // MdadmSchedule is a per-array automatic data-scrub schedule.
@@ -345,6 +364,9 @@ const (
 	// EventRaidDiskOffline fires when a member disk of a RAID array drops out,
 	// and again when it comes back.
 	EventRaidDiskOffline NotificationEvent = "raid_disk_offline"
+	// EventRaidScanFailed fires when Veery cannot start a data-scrub, and again
+	// when a scheduled scrub runs out of retries.
+	EventRaidScanFailed NotificationEvent = "raid_scan_failed"
 )
 
 // AllNotificationEvents lists every event in display order.
@@ -359,6 +381,7 @@ var AllNotificationEvents = []NotificationEvent{
 	EventRaidDiskOffline,
 	EventRaidScanStarted,
 	EventRaidScanFinished,
+	EventRaidScanFailed,
 }
 
 // Event is one recorded entry in the event log: a copy of something Veery

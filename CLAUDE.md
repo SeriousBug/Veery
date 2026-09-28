@@ -35,7 +35,9 @@ static Go binary with the web UI embedded (distroless/static base).
   what they change behind Veery's back, see `docs/reconcile.md`. Optional mdadm (Linux software
   RAID) health reads `${HOST_PROC}/mdstat` + `${HOST_SYS}/block/*/md/` (`mdadm.go`, no `mdadm`
   binary); enable by mounting host `/proc` and `/sys` and setting `HOST_PROC`/`HOST_SYS` (same
-  mounts host metrics need); starting a scan needs `/sys` mounted **writable**, see `docs/mdadm.md`.
+  mounts host metrics need); starting a scan needs `/sys` mounted **writable**, running as root,
+  and `CAP_SYS_ADMIN`. Failed starts surface as `MdArray.ScanFailure` and `raid_scan_failed`, see
+  `docs/mdadm.md`.
 - `internal/raidwatch/`: stateful mdadm poller on top of `ScanMdadm`: edge-triggered RAID alerts
   (`raid_scan_started`/`raid_scan_finished`/`raid_unhealthy`/`raid_disk_offline`), the Veery-tracked
   last-scan time (`MdArray.LastScanAt`), and per-array scheduled scrubs from iCal RRULE strings
