@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -108,7 +109,10 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		OriginPatterns: []string{"*"},
+		// Browsers do not apply CORS to WebSockets and send the session cookie
+		// from same-site subdomains, so only the configured origin may connect.
+		// Same-host origins are always allowed.
+		OriginPatterns: []string{strings.TrimRight(s.cfg.Origin, "/")},
 	})
 	if err != nil {
 		return

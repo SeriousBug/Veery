@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/fs"
+	"log"
 	"net/http"
 	"strings"
 
@@ -37,6 +38,7 @@ type Server struct {
 	notif *notify.Notifier
 	raid  *raidwatch.Watcher
 	oidc  *oidc.Manager
+	csrf  *http.CrossOriginProtection
 }
 
 // SetDocker attaches the Docker manager used by container/stack handlers. It is
@@ -71,6 +73,11 @@ func New(st *store.Store, mgr *auth.Manager, cfg Config) *Server {
 		spa:   web.DistFS(),
 		hub:   newHub(),
 		mux:   http.NewServeMux(),
+		csrf:  http.NewCrossOriginProtection(),
+	}
+	// Covers browsers that omit Sec-Fetch-Site behind a proxy that rewrites Host.
+	if err := s.csrf.AddTrustedOrigin(strings.TrimRight(cfg.Origin, "/")); err != nil {
+		log.Printf("csrf: ignoring origin %q: %v", cfg.Origin, err)
 	}
 	s.routes()
 	return s
@@ -79,8 +86,10 @@ func New(st *store.Store, mgr *auth.Manager, cfg Config) *Server {
 // Hub exposes the WS fan-out hub for producers (metrics, status, jobs).
 func (s *Server) Hub() *Hub { return s.hub }
 
-// Handler returns the root HTTP handler.
-func (s *Server) Handler() http.Handler { return s.mux }
+// Handler returns the root HTTP handler. Cross-origin protection rejects
+// unsafe-method requests from other origins, including same-site subdomains
+// that SameSite=Lax cookies do not guard against.
+func (s *Server) Handler() http.Handler { return s.csrf.Handler(s.mux) }
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
