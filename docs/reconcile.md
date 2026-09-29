@@ -32,6 +32,15 @@ Every path that creates a container records the id it created (`Adopt`, the upda
 
 Rows written before the column existed carry an empty id and are backfilled on the first sweep.
 
+## Compose's temporary containers
+
+`docker compose up -d` recreates a service under a temporary `<12-char id>_<name>` before giving
+the new container the real name. A sweep that lands in that window sees a container in a managed
+stack with no row, so `isService` excludes these: the prefix is either the container's own id
+(older compose parks the old container) or the id in its `com.docker.compose.replace` label (newer
+compose creates the replacement under the temporary name). Rows that older versions of Veery
+adopted this way are deleted once the container is gone.
+
 ## The settled gate
 
 A re-snapshot only happens once the container has **settled**: running and passing its health check,

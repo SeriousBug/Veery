@@ -281,3 +281,85 @@ func waitExited(t *testing.T, ctx context.Context, m *Manager, id string) {
 	}
 	t.Fatalf("container %s never exited", id)
 }
+
+func TestIsComposeTemp(t *testing.T) {
+	const oldID = "36187cec704b2f9a0c1e"
+	const newID = "a1b2c3d4e5f6a7b8c9d0"
+	cases := []struct {
+		name, id string
+		labels   map[string]string
+		want     bool
+	}{
+		{"36187cec704b_homeassistant", oldID, nil, true},
+		{"36187cec704b_homeassistant", newID, map[string]string{composeReplaceLabel: oldID}, true},
+		{"36187cec704b_homeassistant", newID, nil, false},
+		{"homeassistant", oldID, nil, false},
+		{"my_app", newID, nil, false},
+	}
+	for _, c := range cases {
+		if got := isComposeTemp(c.name, c.id, c.labels); got != c.want {
+			t.Errorf("isComposeTemp(%q, %q, %v) = %v, want %v", c.name, c.id, c.labels, got, c.want)
+		}
+	}
+}
+
+// `docker compose up -d` on an edited service creates the replacement under a
+// temporary name before removing the old one. A sweep that lands in that window
+// must not adopt it, or it reads as a removed service once compose renames it.
+func TestReconcileIgnoresComposeRecreateInFlight(t *testing.T) {
+	ctx := context.Background()
+	f := newReconcileFixture(t, ctx, nil)
+
+	old, _ := f.snapshot(t)
+	tmpName := old.ContainerID[:12] + "_" + f.name
+	created, err := f.m.cli.ContainerCreate(ctx, &container.Config{
+		Image: "busybox:latest",
+		Cmd:   []string{"sh", "-c", "sleep 3600"},
+		Labels: map[string]string{
+			projectLabel:        f.project,
+			serviceLabel:        "app",
+			composeReplaceLabel: old.ContainerID,
+		},
+	}, &container.HostConfig{}, nil, nil, tmpName)
+	if err != nil {
+		t.Fatalf("create replacement: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = f.m.cli.ContainerRemove(context.Background(), created.ID, container.RemoveOptions{Force: true})
+	})
+
+	f.m.Reconcile(ctx)
+
+	if _, err := f.st.ManagedByName(tmpName); err == nil {
+		t.Fatalf("compose's temporary container was adopted")
+	}
+}
+
+// Earlier versions adopted compose's temporary containers. Once gone, their
+// records are dropped instead of lingering as removed services.
+func TestReconcileForgetsStaleComposeTemp(t *testing.T) {
+	ctx := context.Background()
+	f := newReconcileFixture(t, ctx, nil)
+
+	mc, _ := f.snapshot(t)
+	tmpName := mc.ContainerID[:12] + "_" + f.name
+	if err := f.st.AddManagedContainer(store.ManagedContainer{
+		ID:            genID(),
+		StackID:       f.project,
+		ContainerName: tmpName,
+		SnapshotJSON:  mc.SnapshotJSON,
+		ContainerID:   mc.ContainerID,
+		CreatedAt:     time.Now().Unix(),
+	}); err != nil {
+		t.Fatalf("add stale row: %v", err)
+	}
+
+	f.m.Reconcile(ctx)
+
+	if _, err := f.st.ManagedByName(tmpName); err == nil {
+		t.Fatalf("stale compose temporary record was kept")
+	}
+	if _, err := f.st.ManagedByName(f.name); err != nil {
+		t.Fatalf("the real service record was dropped: %v", err)
+	}
+}
