@@ -36,8 +36,9 @@ func testServerWith(t *testing.T) (*httptest.Server, *store.Store, *http.Client,
 
 	ts := httptest.NewServer(nil)
 	t.Cleanup(ts.Close)
+	// WebAuthn rejects IP addresses as the RPID.
+	ts.URL = strings.Replace(ts.URL, "127.0.0.1", "localhost", 1)
 
-	// RPID must be the host of the test origin (127.0.0.1).
 	host := strings.TrimPrefix(ts.URL, "http://")
 	rpID := host[:strings.IndexByte(host, ':')]
 
