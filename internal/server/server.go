@@ -13,6 +13,7 @@ import (
 	"github.com/SeriousBug/Veery/internal/docker"
 	"github.com/SeriousBug/Veery/internal/notify"
 	"github.com/SeriousBug/Veery/internal/oidc"
+	"github.com/SeriousBug/Veery/internal/raidwatch"
 	"github.com/SeriousBug/Veery/internal/store"
 	"github.com/SeriousBug/Veery/web"
 )
@@ -34,6 +35,7 @@ type Server struct {
 	mux   *http.ServeMux
 	dkr   *docker.Manager
 	notif *notify.Notifier
+	raid  *raidwatch.Watcher
 	oidc  *oidc.Manager
 }
 
@@ -44,6 +46,10 @@ func (s *Server) SetDocker(m *docker.Manager) { s.dkr = m }
 // SetNotifier attaches the notifier used by the notification handlers and the
 // auth events. Set after New, like SetDocker.
 func (s *Server) SetNotifier(n *notify.Notifier) { s.notif = n }
+
+// SetRaidWatcher attaches the watcher that starts RAID scrubs and records when
+// they fail to start.
+func (s *Server) SetRaidWatcher(w *raidwatch.Watcher) { s.raid = w }
 
 // SetOIDC attaches the external identity provider used by the OIDC login
 // handlers. Set after New, like SetDocker. A nil manager leaves OIDC disabled.

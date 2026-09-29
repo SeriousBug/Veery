@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/SeriousBug/Veery/internal/api"
 	"github.com/SeriousBug/Veery/internal/metrics"
@@ -238,7 +239,11 @@ func (s *Server) handleListDisks(w http.ResponseWriter, r *http.Request) {
 // handleStartMdadmScan starts a data-scrub (check) on a RAID array. The
 // refreshed status arrives on the next WS metrics tick, so there is no body.
 func (s *Server) handleStartMdadmScan(w http.ResponseWriter, r *http.Request) {
-	if err := metrics.StartMdadmCheck(r.PathValue("name")); err != nil {
+	start := metrics.StartMdadmCheck
+	if s.raid != nil {
+		start = func(name string) error { return s.raid.Start(name, time.Now()) }
+	}
+	if err := start(r.PathValue("name")); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}

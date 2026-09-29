@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { HardDriveDownload, ShieldCheck, ShieldAlert, ShieldX, Loader } from "lucide-react";
+import { AlertTriangle, HardDriveDownload, ShieldCheck, ShieldAlert, ShieldX, Loader } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { css, cx } from "styled-system/css";
 import { hstack, vstack } from "styled-system/patterns";
@@ -9,7 +9,7 @@ import { http, HttpError } from "../api/http";
 import { toaster } from "../lib/toaster";
 import { clampPct, formatRate, formatAge } from "../lib/format";
 import { ConfirmDialog } from "./ConfirmDialog";
-import type { MdArray, MdArrayState } from "../api/generated";
+import type { MdArray, MdArrayState, MdScanFailure } from "../api/generated";
 
 const stateColor: Record<MdArrayState, string> = {
   healthy: css({ color: "teal.600" }),
@@ -143,6 +143,8 @@ function ArrayRow({ array }: { array: MdArray }) {
         </span>
       )}
 
+      {array.scanFailure && <ScanFailureNotice failure={array.scanFailure} />}
+
       <ConfirmDialog
         open={confirm}
         onOpenChange={setConfirm}
@@ -153,6 +155,49 @@ function ArrayRow({ array }: { array: MdArray }) {
       />
     </div>
   );
+}
+
+function ScanFailureNotice({ failure }: { failure: MdScanFailure }) {
+  const tries = `${failure.attempts} attempt${failure.attempts === 1 ? "" : "s"}`;
+  let status: string;
+  if (!failure.scheduled) {
+    status = `Failed ${formatAge(failure.lastAt)}.`;
+  } else if (failure.nextRetryAt > 0) {
+    status = `${tries} so far, last ${formatAge(failure.lastAt)}. Retrying ${formatIn(failure.nextRetryAt)}.`;
+  } else {
+    status = `Gave up after ${tries}, last ${formatAge(failure.lastAt)}. The next scheduled scan will try again.`;
+  }
+  return (
+    <div
+      role="alert"
+      className={hstack({
+        gap: "2.5",
+        alignItems: "flex-start",
+        p: "3.5",
+        borderRadius: "lg",
+        bg: "coral.100",
+        color: "ink.900",
+        fontSize: "sm",
+      })}
+    >
+      <AlertTriangle size={16} className={css({ color: "coral.600", flexShrink: 0, mt: "0.5" })} />
+      <div className={vstack({ gap: "1", alignItems: "stretch", minW: 0 })}>
+        <span className={css({ fontWeight: "bold" })}>
+          {failure.scheduled ? "Scheduled scan couldn't start" : "Scan couldn't start"}
+        </span>
+        <span className={css({ overflowWrap: "anywhere" })}>{failure.error}</span>
+        <span className={css({ color: "ink.800" })}>{status}</span>
+      </div>
+    </div>
+  );
+}
+
+function formatIn(unixSeconds: number): string {
+  const mins = Math.ceil((unixSeconds - Date.now() / 1000) / 60);
+  if (mins <= 0) return "shortly";
+  if (mins < 60) return `in ${mins} min${mins === 1 ? "" : "s"}`;
+  const hours = Math.round(mins / 60);
+  return `in ${hours} hour${hours === 1 ? "" : "s"}`;
 }
 
 function Members({ array }: { array: MdArray }) {

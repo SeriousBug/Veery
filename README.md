@@ -127,6 +127,9 @@ owning the socket on the host, which is why the GID is read from the host rather
 Whatever grants that access is inherited by the helper container Veery uses to update itself, so it
 only has to be set here.
 
+To let Veery start RAID scrubs (optional, health display works without it), it also needs to run
+as root with `SYS_ADMIN` and a writable `/sys` mount. See [docs/mdadm.md](docs/mdadm.md#starting-scans).
+
 Then read the first-run enrollment link from the logs and open it to register your admin passkey:
 
 ```sh
@@ -163,7 +166,8 @@ The link is single-use and valid for 24 hours. Open it to register a new passkey
 - Veery must run behind TLS: WebAuthn needs a secure context and the session cookie is `Secure`.
 - Invites are single-use and expiring. Sessions use random, expiring tokens in an `HttpOnly` cookie
   that JavaScript never sees. The same cookie authenticates the WebSocket upgrade.
-- Mount `/proc` and `/sys` read-only. The Docker socket must allow API calls, since it cannot be
+- Mount `/proc` and `/sys` read-only unless you want Veery to start RAID scrubs, which needs `/sys`
+  writable, root, and `SYS_ADMIN`. The Docker socket must allow API calls, since it cannot be
   read-only for operations like start and stop, so treat access to Veery as access to the host.
 
 ## Limitations and roadmap
