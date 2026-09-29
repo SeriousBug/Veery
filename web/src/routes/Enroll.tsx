@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { Navigate } from "@tanstack/react-router";
 import { startRegistration } from "@simplewebauthn/browser";
 import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
 import { Loader2, Sparkles, Wand2 } from "lucide-react";
@@ -14,11 +14,15 @@ interface CreationOptions {
 }
 
 export function Enroll({ token }: { token: string }) {
-  const navigate = useNavigate();
-  const { refresh } = useAuth();
+  const { user, refresh } = useAuth();
   const [name, setName] = useState("My passkey");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [enrolled, setEnrolled] = useState(false);
+
+  // Wait for the new session to reach the auth context; navigating as soon as
+  // refresh() resolves lands on the protected route while user is still null.
+  if (enrolled && user) return <Navigate to="/" />;
 
   if (!token) {
     return (
@@ -41,7 +45,7 @@ export function Enroll({ token }: { token: string }) {
       const credential = await startRegistration({ optionsJSON: options.publicKey });
       await http.post("/auth/register/finish", credential as unknown as Record<string, unknown>);
       await refresh();
-      await navigate({ to: "/" });
+      setEnrolled(true);
     } catch (err) {
       if (err instanceof DOMException && err.name === "NotAllowedError") {
         setError("That was cancelled. Give it another try when you're ready.");

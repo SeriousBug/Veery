@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { Navigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { startAuthentication } from "@simplewebauthn/browser";
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
@@ -22,8 +22,7 @@ const oidcErrorMessages: Record<string, string> = {
 };
 
 export function Login({ ssoError = "" }: { ssoError?: string }) {
-  const navigate = useNavigate();
-  const { refresh } = useAuth();
+  const { user, refresh } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +44,6 @@ export function Login({ ssoError = "" }: { ssoError?: string }) {
       });
       await http.post("/auth/login/finish", credential as unknown as Record<string, unknown>);
       await refresh();
-      await navigate({ to: "/" });
     } catch (err) {
       if (err instanceof DOMException && err.name === "NotAllowedError") {
         setError("That was cancelled. Give it another try when you're ready.");
@@ -58,6 +56,10 @@ export function Login({ ssoError = "" }: { ssoError?: string }) {
       setBusy(false);
     }
   }
+
+  // refresh() resolves before the new user reaches context, so redirect from
+  // the auth state rather than navigating right after it.
+  if (user) return <Navigate to="/" />;
 
   return (
     <AuthCard>
