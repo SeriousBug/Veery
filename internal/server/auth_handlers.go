@@ -21,10 +21,7 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 	}
 	s.setCeremonyCookie(w, cid)
 	// Stash the invite token in a cookie so finish can consume it.
-	http.SetCookie(w, &http.Cookie{
-		Name: "veery_invite", Value: req.Token, Path: "/auth", MaxAge: 300,
-		HttpOnly: true, Secure: s.cfg.Secure, SameSite: http.SameSiteLaxMode,
-	})
+	s.setCookie(w, inviteCookieName, req.Token, 300)
 	writeJSON(w, http.StatusOK, opts)
 }
 
@@ -34,12 +31,12 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	inviteCookie, err := r.Cookie("veery_invite")
-	if err != nil {
+	invite, ok := s.cookie(r, inviteCookieName)
+	if !ok {
 		writeErr(w, http.StatusBadRequest, "no invite in progress")
 		return
 	}
-	userID, err := s.auth.FinishRegistration(cid, inviteCookie.Value, r)
+	userID, err := s.auth.FinishRegistration(cid, invite, r)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -129,8 +126,8 @@ func (s *Server) issueSession(w http.ResponseWriter, userID string) {
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie(auth.SessionCookieName); err == nil {
-		s.store.DeleteSession(c.Value)
+	if token, ok := s.cookie(r, auth.SessionCookieName); ok {
+		s.store.DeleteSession(token)
 	}
 	s.clearSessionCookie(w)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})

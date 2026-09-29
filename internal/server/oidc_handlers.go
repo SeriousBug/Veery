@@ -40,10 +40,7 @@ func (s *Server) handleOIDCStart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadGateway, "could not reach the identity provider")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name: oidcStateCookieName, Value: state, Path: "/auth/oidc", MaxAge: 600,
-		HttpOnly: true, Secure: s.cfg.Secure, SameSite: http.SameSiteLaxMode,
-	})
+	s.setCookie(w, oidcStateCookieName, state, 600)
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
@@ -149,18 +146,15 @@ func (s *Server) validOIDCState(r *http.Request, state string) bool {
 	if state == "" {
 		return false
 	}
-	c, err := r.Cookie(oidcStateCookieName)
-	if err != nil || c.Value == "" {
+	want, ok := s.cookie(r, oidcStateCookieName)
+	if !ok {
 		return false
 	}
-	return subtle.ConstantTimeCompare([]byte(c.Value), []byte(state)) == 1
+	return subtle.ConstantTimeCompare([]byte(want), []byte(state)) == 1
 }
 
 func (s *Server) clearOIDCStateCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name: oidcStateCookieName, Value: "", Path: "/auth/oidc", MaxAge: -1,
-		HttpOnly: true, Secure: s.cfg.Secure, SameSite: http.SameSiteLaxMode,
-	})
+	s.clearCookie(w, oidcStateCookieName)
 }
 
 // redirectOIDCError sends the browser back to the login page with a short code
