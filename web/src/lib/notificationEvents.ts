@@ -52,4 +52,9 @@ export const EVENTS: { event: NotificationEvent; title: string; hint: string }[]
     title: "RAID scan finished",
     hint: "A data-scrub finishes and the array returns to idle.",
   },
+  {
+    event: "raid_scan_failed",
+    title: "RAID scan couldn't start",
+    hint: "A data-scrub, scheduled or started by hand, fails to start, and again when scheduled retries run out.",
+  },
 ];

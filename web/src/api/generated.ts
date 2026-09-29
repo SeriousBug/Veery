@@ -178,6 +178,36 @@ export interface MdArray {
    * it when it observes a check return to idle. 0 means unknown (none seen yet).
    */
   lastScanAt: number /* int64 */;
+  /**
+   * ScanFailure is set while Veery's last attempt to start a scrub on this
+   * array failed, and cleared once a scrub is seen running.
+   */
+  scanFailure?: MdScanFailure;
+}
+/**
+ * MdScanFailure describes a data-scrub Veery tried to start and could not.
+ */
+export interface MdScanFailure {
+  /**
+   * Error is why the kernel refused, e.g. missing permissions.
+   */
+  error: string;
+  /**
+   * FirstAt and LastAt are the Unix times of the first and latest attempt.
+   */
+  firstAt: number /* int64 */;
+  lastAt: number /* int64 */;
+  attempts: number /* int */;
+  /**
+   * NextRetryAt is when the scheduler tries again. 0 means it gave up, and the
+   * next scheduled occurrence starts a fresh attempt.
+   */
+  nextRetryAt: number /* int64 */;
+  /**
+   * Scheduled is false for a scrub an admin started by hand, which is not
+   * retried.
+   */
+  scheduled: boolean;
 }
 /**
  * MdadmSchedule is a per-array automatic data-scrub schedule.
@@ -412,6 +442,11 @@ export const EventRaidUnhealthy: NotificationEvent = "raid_unhealthy";
  * and again when it comes back.
  */
 export const EventRaidDiskOffline: NotificationEvent = "raid_disk_offline";
+/**
+ * EventRaidScanFailed fires when Veery cannot start a data-scrub, and again
+ * when a scheduled scrub runs out of retries.
+ */
+export const EventRaidScanFailed: NotificationEvent = "raid_scan_failed";
 /**
  * Event is one recorded entry in the event log: a copy of something Veery
  * notified about, kept whether or not it was actually delivered. Muting a

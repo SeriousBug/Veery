@@ -1,6 +1,7 @@
 package raidwatch
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -208,4 +209,148 @@ func assertHas(t *testing.T, f *fakeNotifier, want api.NotificationEvent) {
 		}
 	}
 	t.Fatalf("events %v missing %s", f.events, want)
+}
+
+func TestScheduledStartFailureRetriesThenGivesUp(t *testing.T) {
+	st := openTestStore(t)
+	w, f, set, _ := testWatcher(t, st)
+	attempts := 0
+	w.start = func(string) error { attempts++; return errors.New("permission denied") }
+
+	if err := st.SaveMdadmSchedules(api.MdadmScheduleConfig{Schedules: map[string]api.MdadmSchedule{
+		"md0": {RRule: "FREQ=DAILY;BYHOUR=20;BYMINUTE=0", Enabled: true},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	seeded := time.Date(2024, 1, 1, 0, 0, 0, 0, time.Local).Unix()
+	if err := st.SaveMdadmLastRun(map[string]int64{"md0": seeded}); err != nil {
+		t.Fatal(err)
+	}
+	set([]api.MdArray{array("md0", api.MdHealthy, "idle", member("sda1", true))})
+
+	now := time.Date(2024, 1, 1, 20, 30, 0, 0, time.Local)
+	w.sweep(now)
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1", attempts)
+	}
+	assertHas(t, f, api.EventRaidScanFailed)
+
+	// Polls before the retry is due must not try again.
+	w.sweep(now.Add(30 * time.Second))
+	if attempts != 1 {
+		t.Fatalf("attempts = %d before retry was due, want 1", attempts)
+	}
+
+	for _, d := range retryDelays {
+		now = now.Add(d)
+		w.sweep(now)
+	}
+	if want := 1 + len(retryDelays); attempts != want {
+		t.Fatalf("attempts = %d, want %d", attempts, want)
+	}
+	failures, err := st.LoadMdadmScanFailures()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fail := failures["md0"]
+	if fail.Attempts != attempts || fail.NextRetryAt != 0 || !fail.Scheduled {
+		t.Fatalf("failure = %+v, want %d attempts and no further retry", fail, attempts)
+	}
+	// Only the first failure and the give-up are announced.
+	if len(f.events) != 2 {
+		t.Fatalf("events = %v, want two raid_scan_failed", f.events)
+	}
+
+	// Gave up: no more attempts until the next occurrence.
+	w.sweep(now.Add(2 * time.Hour))
+	if want := 1 + len(retryDelays); attempts != want {
+		t.Fatalf("attempts = %d after giving up, want %d", attempts, want)
+	}
+
+	ls, err := st.LoadMdadmLastScan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ls["md0"] != 0 {
+		t.Fatalf("last scan = %d after only failed starts, want 0", ls["md0"])
+	}
+}
+
+func TestScheduledRetrySuccessClearsFailure(t *testing.T) {
+	st := openTestStore(t)
+	w, _, set, _ := testWatcher(t, st)
+	fail := true
+	w.start = func(string) error {
+		if fail {
+			return errors.New("read-only file system")
+		}
+		return nil
+	}
+
+	if err := st.SaveMdadmSchedules(api.MdadmScheduleConfig{Schedules: map[string]api.MdadmSchedule{
+		"md0": {RRule: "FREQ=DAILY;BYHOUR=20;BYMINUTE=0", Enabled: true},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveMdadmLastRun(map[string]int64{"md0": time.Date(2024, 1, 1, 0, 0, 0, 0, time.Local).Unix()}); err != nil {
+		t.Fatal(err)
+	}
+	set([]api.MdArray{array("md0", api.MdHealthy, "idle", member("sda1", true))})
+
+	now := time.Date(2024, 1, 1, 20, 30, 0, 0, time.Local)
+	w.sweep(now)
+	lastRun, _ := st.LoadMdadmLastRun()
+	if lastRun["md0"] == now.Unix() {
+		t.Fatal("last run advanced on a failed start")
+	}
+
+	fail = false
+	w.sweep(now.Add(retryDelays[0]))
+	failures, _ := st.LoadMdadmScanFailures()
+	if _, ok := failures["md0"]; ok {
+		t.Fatalf("failure still recorded after a successful retry: %+v", failures["md0"])
+	}
+	lastRun, _ = st.LoadMdadmLastRun()
+	if lastRun["md0"] != now.Add(retryDelays[0]).Unix() {
+		t.Fatalf("last run = %d, want the successful retry time", lastRun["md0"])
+	}
+}
+
+func TestManualStartFailureIsRecordedAndNotRetried(t *testing.T) {
+	st := openTestStore(t)
+	w, f, set, _ := testWatcher(t, st)
+	attempts := 0
+	w.start = func(string) error { attempts++; return errors.New("permission denied") }
+	set([]api.MdArray{array("md0", api.MdHealthy, "idle", member("sda1", true))})
+
+	now := time.Now()
+	if err := w.Start("md0", now); err == nil {
+		t.Fatal("Start returned nil for a failed start")
+	}
+	assertHas(t, f, api.EventRaidScanFailed)
+	failures, _ := st.LoadMdadmScanFailures()
+	if got := failures["md0"]; got.Scheduled || got.NextRetryAt != 0 || got.Attempts != 1 {
+		t.Fatalf("failure = %+v, want one unscheduled attempt", got)
+	}
+
+	w.sweep(now.Add(time.Hour))
+	if attempts != 1 {
+		t.Fatalf("manual failure was retried: %d attempts", attempts)
+	}
+
+	// Seeing a scrub run (e.g. started from the host) clears the warning.
+	set([]api.MdArray{array("md0", api.MdRecovering, "check", member("sda1", true))})
+	w.sweep(now.Add(2 * time.Hour))
+	failures, _ = st.LoadMdadmScanFailures()
+	if _, ok := failures["md0"]; ok {
+		t.Fatal("failure still recorded while a scrub is running")
+	}
+
+	if err := w.Start("md9", now); err == nil {
+		t.Fatal("Start accepted an unknown array")
+	}
+	failures, _ = st.LoadMdadmScanFailures()
+	if _, ok := failures["md9"]; ok {
+		t.Fatal("recorded a failure for an unknown array")
+	}
 }

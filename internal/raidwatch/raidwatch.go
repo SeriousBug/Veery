@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/SeriousBug/Veery/internal/api"
@@ -25,6 +26,9 @@ type Notifier interface {
 // scheduler. scan and start are injectable so tests can drive it without a real
 // /proc and /sys.
 type Watcher struct {
+	// mu serialises the read-modify-write of the stored scan failures between
+	// the poller and manual starts from the API.
+	mu    sync.Mutex
 	st    *store.Store
 	notif Notifier
 	scan  func() []api.MdArray
@@ -77,6 +81,8 @@ func (w *Watcher) sweep(now time.Time) {
 		return
 	}
 	w.checkTransitions(arrays, now)
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	w.runSchedules(arrays, now)
 }
 
@@ -178,15 +184,23 @@ func (w *Watcher) notifyDisks(a api.MdArray, prev store.MdArrayBaseline) {
 	}
 }
 
+// retryDelays are the waits between attempts at a scheduled scrub that failed
+// to start. Once they run out the scheduler gives up until the next occurrence,
+// so a setup problem doesn't turn into an attempt on every poll.
+var retryDelays = []time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute, time.Hour}
+
 // runSchedules fires a scrub on any array whose schedule has an occurrence due
-// since it last ran and that is currently idle.
+// since it last ran and that is currently idle, and retries ones that failed to
+// start.
 func (w *Watcher) runSchedules(arrays []api.MdArray, now time.Time) {
 	cfg, err := w.st.LoadMdadmSchedules()
 	if err != nil {
 		log.Printf("raidwatch: load schedules: %v", err)
 		return
 	}
-	if len(cfg.Schedules) == 0 {
+	failures, err := w.st.LoadMdadmScanFailures()
+	if err != nil {
+		log.Printf("raidwatch: load scan failures: %v", err)
 		return
 	}
 	lastRun, err := w.st.LoadMdadmLastRun()
@@ -195,10 +209,18 @@ func (w *Watcher) runSchedules(arrays []api.MdArray, now time.Time) {
 		return
 	}
 
-	changed := false
+	runChanged, failChanged := false, false
 	for _, a := range arrays {
-		sc, ok := cfg.Schedules[a.Name]
-		if !ok || !sc.Enabled || sc.RRule == "" {
+		sc, scheduled := cfg.Schedules[a.Name]
+		scheduled = scheduled && sc.Enabled && sc.RRule != ""
+		fail, failed := failures[a.Name]
+		// A scrub running means whatever stopped the last start has been fixed,
+		// and a scheduled failure is moot once its schedule is gone.
+		if failed && (a.SyncAction == "check" || (fail.Scheduled && !scheduled)) {
+			delete(failures, a.Name)
+			failed, failChanged = false, true
+		}
+		if !scheduled {
 			continue
 		}
 		since, seeded := lastRun[a.Name]
@@ -206,7 +228,7 @@ func (w *Watcher) runSchedules(arrays []api.MdArray, now time.Time) {
 			// First time we see this schedule: anchor "last run" to now so a
 			// new schedule doesn't fire for occurrences already in the past.
 			lastRun[a.Name] = now.Unix()
-			changed = true
+			runChanged = true
 			continue
 		}
 		// idle covers "no scan running"; a blank action is the pre-enrichment
@@ -214,28 +236,121 @@ func (w *Watcher) runSchedules(arrays []api.MdArray, now time.Time) {
 		if a.SyncAction != "idle" && a.SyncAction != "" {
 			continue
 		}
-		due, err := dueSince(sc.RRule, time.Unix(since, 0), now)
-		if err != nil {
-			log.Printf("raidwatch: bad schedule for %s (%q): %v", a.Name, sc.RRule, err)
-			continue
+		retrying := failed && fail.Scheduled && fail.NextRetryAt > 0
+		if retrying {
+			if now.Unix() < fail.NextRetryAt {
+				continue
+			}
+		} else {
+			due, err := dueSince(sc.RRule, time.Unix(since, 0), now)
+			if err != nil {
+				log.Printf("raidwatch: bad schedule for %s (%q): %v", a.Name, sc.RRule, err)
+				continue
+			}
+			if !due {
+				continue
+			}
 		}
-		if !due {
-			continue
-		}
+
 		if err := w.start(a.Name); err != nil {
 			log.Printf("raidwatch: scheduled scan on %s: %v", a.Name, err)
+			prev := fail
+			if !retrying {
+				prev = api.MdScanFailure{}
+			}
+			next := w.recordFailure(a.Name, prev, err, true, now)
+			failures[a.Name] = next
+			failChanged = true
+			if next.NextRetryAt == 0 {
+				// Out of retries: consume this occurrence so the next one gets
+				// a fresh set of attempts.
+				lastRun[a.Name] = now.Unix()
+				runChanged = true
+			}
 			continue
 		}
 		log.Printf("raidwatch: started scheduled scrub on %s", a.Name)
+		if failed {
+			delete(failures, a.Name)
+			failChanged = true
+		}
 		lastRun[a.Name] = now.Unix()
-		changed = true
+		runChanged = true
 	}
 
-	if changed {
+	if runChanged {
 		if err := w.st.SaveMdadmLastRun(lastRun); err != nil {
 			log.Printf("raidwatch: save last run: %v", err)
 		}
 	}
+	if failChanged {
+		if err := w.st.SaveMdadmScanFailures(failures); err != nil {
+			log.Printf("raidwatch: save scan failures: %v", err)
+		}
+	}
+}
+
+// recordFailure builds the failure record after a failed start and notifies on
+// the first failure and when retries run out, so a broken setup is announced
+// without a message per attempt.
+func (w *Watcher) recordFailure(name string, prev api.MdScanFailure, err error, scheduled bool, now time.Time) api.MdScanFailure {
+	f := prev
+	if f.Attempts == 0 {
+		f.FirstAt = now.Unix()
+	}
+	f.Attempts++
+	f.LastAt = now.Unix()
+	f.Error = err.Error()
+	f.Scheduled = scheduled
+	f.NextRetryAt = 0
+	if scheduled && f.Attempts <= len(retryDelays) {
+		f.NextRetryAt = now.Add(retryDelays[f.Attempts-1]).Unix()
+	}
+
+	switch {
+	case !scheduled:
+		w.notify(api.EventRaidScanFailed, "Couldn't start scan on "+name, err.Error())
+	case f.Attempts == 1:
+		w.notify(api.EventRaidScanFailed, "Scheduled scan on "+name+" couldn't start",
+			err.Error()+". Veery will retry.")
+	case f.NextRetryAt == 0:
+		w.notify(api.EventRaidScanFailed, "Scheduled scan on "+name+" failed",
+			fmt.Sprintf("%s. Gave up after %d attempts; the next scheduled run will try again.", err, f.Attempts))
+	}
+	return f
+}
+
+// Start starts a scrub on behalf of an admin. A failure is recorded and shown
+// on the dashboard like a scheduled one, but not retried.
+func (w *Watcher) Start(name string, now time.Time) error {
+	known := false
+	for _, a := range w.scan() {
+		known = known || a.Name == name
+	}
+	if !known {
+		return fmt.Errorf("no such array %q", name)
+	}
+	startErr := w.start(name)
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	failures, err := w.st.LoadMdadmScanFailures()
+	if err != nil {
+		log.Printf("raidwatch: load scan failures: %v", err)
+		return startErr
+	}
+	if startErr != nil {
+		log.Printf("raidwatch: manual scan on %s: %v", name, startErr)
+		failures[name] = w.recordFailure(name, api.MdScanFailure{}, startErr, false, now)
+	} else if _, ok := failures[name]; ok {
+		delete(failures, name)
+	} else {
+		return nil
+	}
+	if err := w.st.SaveMdadmScanFailures(failures); err != nil {
+		log.Printf("raidwatch: save scan failures: %v", err)
+	}
+	return startErr
 }
 
 func snapshot(a api.MdArray) store.MdArrayBaseline {

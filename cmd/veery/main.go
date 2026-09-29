@@ -131,7 +131,9 @@ func main() {
 	// The RAID watcher reads /proc and /sys, not Docker, so it runs regardless
 	// of whether the Docker manager came up. It no-ops on hosts without md
 	// arrays or the mounts.
-	go raidwatch.New(st, notifier).Poller(ctx)
+	raid := raidwatch.New(st, notifier)
+	srv.SetRaidWatcher(raid)
+	go raid.Poller(ctx)
 
 	httpServer := &http.Server{
 		Addr:              addr,
@@ -245,6 +247,15 @@ func pollMetrics(ctx context.Context, dkr *docker.Manager, hub *server.Hub, st *
 				}
 			} else {
 				log.Printf("metrics: load mdadm last scan: %v", err)
+			}
+			if failures, err := st.LoadMdadmScanFailures(); err == nil {
+				for i := range host.Mdadm {
+					if f, ok := failures[host.Mdadm[i].Name]; ok {
+						host.Mdadm[i].ScanFailure = &f
+					}
+				}
+			} else {
+				log.Printf("metrics: load mdadm scan failures: %v", err)
 			}
 		}
 		containers, err := dkr.ContainerStats(ctx)

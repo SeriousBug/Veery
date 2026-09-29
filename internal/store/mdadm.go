@@ -7,6 +7,7 @@ const (
 	keyMdadmLastScan  = "mdadm_last_scan"
 	keyMdadmLastRun   = "mdadm_last_run"
 	keyMdadmBaseline  = "mdadm_notify_baseline"
+	keyMdadmFailures  = "mdadm_scan_failures"
 )
 
 // LoadMdadmSchedules reads the per-array scrub schedules. An unset config means
@@ -74,4 +75,20 @@ func (s *Store) LoadMdadmBaseline() (map[string]MdArrayBaseline, error) {
 // SaveMdadmBaseline records the arrays' health as of this sweep.
 func (s *Store) SaveMdadmBaseline(m map[string]MdArrayBaseline) error {
 	return s.setJSON(keyMdadmBaseline, m)
+}
+
+// LoadMdadmScanFailures returns, per array, the scrub Veery last failed to
+// start. An array without an entry has no outstanding failure.
+func (s *Store) LoadMdadmScanFailures() (map[string]api.MdScanFailure, error) {
+	out := map[string]api.MdScanFailure{}
+	err := s.getJSON(keyMdadmFailures, &out)
+	if out == nil {
+		out = map[string]api.MdScanFailure{}
+	}
+	return out, err
+}
+
+// SaveMdadmScanFailures records the outstanding scrub-start failures.
+func (s *Store) SaveMdadmScanFailures(m map[string]api.MdScanFailure) error {
+	return s.setJSON(keyMdadmFailures, m)
 }

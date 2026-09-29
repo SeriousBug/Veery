@@ -16,8 +16,11 @@ import (
 	"github.com/docker/docker/api/types/container"
 )
 
-const projectLabel = "com.docker.compose.project"
-const serviceLabel = "com.docker.compose.service"
+const (
+	projectLabel        = "com.docker.compose.project"
+	serviceLabel        = "com.docker.compose.service"
+	composeReplaceLabel = "com.docker.compose.replace"
+)
 
 func genID() string {
 	b := make([]byte, 12)
@@ -246,6 +249,9 @@ func (m *Manager) Adopt(ctx context.Context, stackID string) error {
 	}
 	found := 0
 	for _, c := range summaries {
+		if !isService(c) {
+			continue
+		}
 		name := containerName(c.Names)
 		proj := c.Labels[projectLabel]
 		if proj == "" {

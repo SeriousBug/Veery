@@ -1,6 +1,14 @@
 package metrics
 
-import "testing"
+import (
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"testing"
+)
 
 const healthyMdstat = `Personalities : [raid1] [raid6] [raid5] [raid4]
 md0 : active raid1 sdb1[1] sda1[0]
@@ -137,5 +145,58 @@ func TestParseMdstatRaid6(t *testing.T) {
 func TestParseMdstatEmpty(t *testing.T) {
 	if raws := parseMdstat([]byte("Personalities : [raid1]\nunused devices: <none>\n")); len(raws) != 0 {
 		t.Fatalf("want no arrays, got %d", len(raws))
+	}
+}
+
+func fakeMdHost(t *testing.T, action string) string {
+	t.Helper()
+	root := t.TempDir()
+	proc, md := filepath.Join(root, "proc"), filepath.Join(root, "sys", "block", "md0", "md")
+	if err := os.MkdirAll(proc, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(md, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proc, "mdstat"), []byte(healthyMdstat), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(md, "sync_action")
+	if err := os.WriteFile(path, []byte(action+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOST_PROC", proc)
+	t.Setenv("HOST_SYS", filepath.Join(root, "sys"))
+	return path
+}
+
+func TestStartMdadmCheckConfirmsAction(t *testing.T) {
+	fakeMdHost(t, "idle")
+	if err := StartMdadmCheck("md0"); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if err := StartMdadmCheck("../md0"); err == nil {
+		t.Fatal("started a check on an array mdstat doesn't list")
+	}
+}
+
+func TestStartMdadmCheckReportsUnwritableSysfs(t *testing.T) {
+	path := fakeMdHost(t, "idle")
+	if err := os.Chmod(path, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file modes")
+	}
+	err := StartMdadmCheck("md0")
+	if !errors.Is(err, fs.ErrPermission) || !strings.Contains(err.Error(), "SYS_ADMIN") {
+		t.Fatalf("err = %v, want a permission error naming SYS_ADMIN", err)
+	}
+}
+
+func TestExplainStartError(t *testing.T) {
+	err := explainStartError("md0", &fs.PathError{Op: "open", Path: "sync_action", Err: syscall.EROFS})
+	if !errors.Is(err, syscall.EROFS) || !strings.Contains(err.Error(), "read-only") {
+		t.Fatalf("err = %v, want a read-only mount explanation", err)
 	}
 }

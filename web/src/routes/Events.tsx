@@ -3,14 +3,18 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   Activity,
+  AlertTriangle,
   ArrowUpCircle,
   Download,
+  HardDrive,
+  HardDriveDownload,
   KeyRound,
   Loader2,
   PackageMinus,
   PackagePlus,
   ScrollText,
   Search,
+  ShieldAlert,
 } from "lucide-react";
 import { css } from "styled-system/css";
 import { flex, hstack, vstack } from "styled-system/patterns";
@@ -22,6 +26,11 @@ import {
   EventContainerAdopted,
   EventContainerMissing,
   EventContainerStatus,
+  EventRaidDiskOffline,
+  EventRaidScanFailed,
+  EventRaidScanFinished,
+  EventRaidScanStarted,
+  EventRaidUnhealthy,
   EventUpdateApplied,
   EventUpdateAvailable,
   type Event as LogEvent,
@@ -42,6 +51,11 @@ const EVENT_META: Record<
   [EventUpdateApplied]: { label: "Update", icon: ArrowUpCircle, bg: "grape.100", fg: "grape.700" },
   [EventUpdateAvailable]: { label: "Update available", icon: Download, bg: "sunshine.300", fg: "ink.900" },
   [EventAuth]: { label: "Account", icon: KeyRound, bg: "ink.100", fg: "textMuted" },
+  [EventRaidUnhealthy]: { label: "RAID health", icon: ShieldAlert, bg: "coral.100", fg: "coral.600" },
+  [EventRaidDiskOffline]: { label: "RAID disk", icon: HardDrive, bg: "coral.100", fg: "coral.600" },
+  [EventRaidScanStarted]: { label: "RAID scan", icon: HardDriveDownload, bg: "grape.100", fg: "grape.700" },
+  [EventRaidScanFinished]: { label: "RAID scan", icon: HardDriveDownload, bg: "grape.100", fg: "grape.700" },
+  [EventRaidScanFailed]: { label: "RAID scan failed", icon: AlertTriangle, bg: "coral.100", fg: "coral.600" },
 };
 
 const FILTERS: { value: NotificationEvent | ""; label: string }[] = [
@@ -52,6 +66,8 @@ const FILTERS: { value: NotificationEvent | ""; label: string }[] = [
   { value: EventUpdateApplied, label: "Updates" },
   { value: EventUpdateAvailable, label: "Updates available" },
   { value: EventAuth, label: "Account" },
+  { value: EventRaidUnhealthy, label: "RAID health" },
+  { value: EventRaidScanFailed, label: "RAID scan failures" },
 ];
 
 const PAGE_SIZE = 50;
