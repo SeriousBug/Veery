@@ -13,7 +13,7 @@ COPY web/ ./
 RUN pnpm build
 
 # --- Stage 2: build the static Go binary embedding the SPA ---
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src
@@ -31,7 +31,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 RUN mkdir -p /data
 
 # --- Stage 3: tiny runtime ---
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian13:nonroot
 COPY --from=build /veery /veery
 COPY --from=build --chown=65532:65532 /data /data
 VOLUME ["/data"]

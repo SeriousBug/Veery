@@ -19,8 +19,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "verbatimModuleSyntax": true,
+    "types": ["vite/client"],
 
-    "baseUrl": ".",
     "paths": {
       "styled-system/*": ["./styled-system/*"]
     }
